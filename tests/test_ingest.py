@@ -42,3 +42,7 @@ async def test_ingest_appends_new_version_on_changed_payload(session):
     assert await session.scalar(select(func.count()).select_from(Report)) == 1  # same report
     report = await session.scalar(select(Report))
     assert report.status == "completed"
+    events = list(await session.scalars(select(Event)))
+    assert len(events) == 2  # "ingested" + "status_changed"
+    status_evt = next(e for e in events if e.kind == "status_changed")
+    assert status_evt.payload == {"from": "open", "to": "completed"}

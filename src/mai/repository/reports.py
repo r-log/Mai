@@ -63,3 +63,12 @@ class ReportRepository:
 
     def add_event(self, **kw) -> None:
         self._session.add(Event(**kw))
+
+    async def all_reports(self) -> list["Report"]:
+        return list(await self._session.scalars(select(Report)))
+
+    async def source_keys_for(self, report_id: str) -> list[str]:
+        rows = await self._session.scalars(
+            select(ReportSourceMap).where(ReportSourceMap.report_id == report_id)
+        )
+        return [f"{m.source_type}:{m.source_id}" for m in rows]

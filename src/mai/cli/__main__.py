@@ -3,14 +3,10 @@ import asyncio
 from pathlib import Path
 
 from mai.config import settings
-from mai.contracts import IntakeEvent
 from mai.db.base import Base
 from mai.db.session import SessionFactory, engine
-from mai.ingest import ingest_event
 from mai.publish.markdown import report_to_markdown
 from mai.repository.reports import ReportRepository
-from mai.db.models import Report, ReportSourceMap
-from sqlalchemy import select
 
 
 async def _init_db() -> None:
@@ -21,12 +17,10 @@ async def _init_db() -> None:
 async def _publish() -> int:
     out = Path(settings.ledger_path) / "content"
     async with SessionFactory() as session:
-        reports = list(await session.scalars(select(Report)))
+        repo = ReportRepository(session)
+        reports = await repo.all_reports()
         for report in reports:
-            src = list(await session.scalars(
-                select(ReportSourceMap).where(ReportSourceMap.report_id == report.id)
-            ))
-            keys = [f"{m.source_type}:{m.source_id}" for m in src]
+            keys = await repo.source_keys_for(report.id)
             target = out / report.core / "bugs"
             target.mkdir(parents=True, exist_ok=True)
             (target / f"{report.canonical_key.replace(':', '-')}.md").write_text(

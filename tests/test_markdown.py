@@ -1,7 +1,5 @@
 from mai.db.models import Report
-from mai.publish.markdown import report_to_markdown
-
-SCHEMA_VERSION = 1
+from mai.publish.markdown import SCHEMA_VERSION, report_to_markdown
 
 
 def test_report_to_markdown_emits_versioned_frontmatter():
