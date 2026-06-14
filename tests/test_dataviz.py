@@ -6,6 +6,7 @@ from mai.repository.drift import DriftRepository
 from mai.repository.reports import ReportRepository
 
 
+
 def test_heat_hex_is_hex_and_redder_when_higher():
     assert heat_hex(70).startswith("#") and len(heat_hex(70)) == 7
     r_lo, r_hi = int(heat_hex(58)[1:3], 16), int(heat_hex(88)[1:3], 16)
@@ -58,3 +59,32 @@ async def test_build_dashboard_summarizes(session):
     assert rf["id"] == "ips:r1"
     assert rf["related"] == "gh_pr:mangosthree/server#7"
     assert rf["url"] == "/three/bugs/ips-r1/"
+
+
+async def test_build_frequency_heightfield(session):
+    from mai.publish.dataviz import build_frequency
+    d = DriftRepository(session)
+    await d.upsert("mangoszero/server", "mangostwo/server", "src/game/Object",
+                   {"shared": 80, "diverged": 60, "identical": 20, "only_a": 0, "only_b": 0})
+    await d.upsert("mangoszero/server", "mangostwo/server", "src/shared",
+                   {"shared": 40, "diverged": 10, "identical": 30, "only_a": 0, "only_b": 0})
+    await session.commit()
+    f = await build_frequency(session)
+    assert {c["name"] for c in f["cores"]} == {"Zero", "Two"}
+    assert all("y" in c and "full" in c for c in f["cores"])
+    names = {s["name"] for s in f["subsystems"]}
+    assert "Object" in names and "shared" in names      # last path segment
+    assert all("x" in s and "z" in s for s in f["subsystems"])
+    zero_full = next(c["full"] for c in f["cores"] if c["name"] == "Zero")
+    assert f["intensity"][zero_full]["Object"] > 0      # 60/80 -> positive height
+
+
+async def test_write_dataviz_writes_three_files(session, tmp_path):
+    from mai.publish.dataviz import write_dataviz
+    await DriftRepository(session).upsert(
+        "mangoszero/server", "mangostwo/server", "src/game/Object",
+        {"shared": 10, "diverged": 5, "identical": 5, "only_a": 0, "only_b": 0})
+    await session.commit()
+    await write_dataviz(session, str(tmp_path))
+    for name in ("drift.json", "dashboard.json", "frequency.json"):
+        assert (tmp_path / "data" / name).exists()

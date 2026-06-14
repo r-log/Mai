@@ -1,4 +1,5 @@
 import json
+import math
 from pathlib import Path
 
 from sqlalchemy import select
@@ -75,6 +76,42 @@ async def build_dashboard(session: AsyncSession) -> dict:
     return {"stats": stats, "top_areas": top_areas, "recently_fixed": fixed}
 
 
+async def build_frequency(session: AsyncSession, top_n: int = 6) -> dict:
+    """Per-core, per-subsystem divergence intensity as a stacked heightfield."""
+    obs = list(await session.scalars(select(DriftObservation)))
+    if not obs:
+        return {"cores": [], "subsystems": [], "intensity": {}, "max": 1.6}
+    forks = sorted({o.fork_a for o in obs} | {o.fork_b for o in obs})
+
+    shared_by_sub: dict[str, int] = {}
+    for o in obs:
+        shared_by_sub[o.subsystem] = shared_by_sub.get(o.subsystem, 0) + o.shared
+    top = [s for s, _ in sorted(shared_by_sub.items(), key=lambda kv: kv[1], reverse=True)[:top_n]]
+
+    subsystems = []
+    for i, full in enumerate(top):
+        ang = 2 * math.pi * i / max(1, len(top))
+        subsystems.append({"name": full.split("/")[-1], "full": full,
+                           "x": round(4.5 * math.cos(ang), 2), "z": round(4.5 * math.sin(ang), 2)})
+
+    intensity: dict[str, dict] = {}
+    for fork in forks:
+        per_sub = {}
+        for sub in subsystems:
+            vals = [o.diverged / o.shared for o in obs
+                    if o.subsystem == sub["full"] and o.shared
+                    and fork in (o.fork_a, o.fork_b)]
+            if vals:
+                per_sub[sub["name"]] = round(sum(vals) / len(vals) * 1.5, 3)
+        intensity[fork] = per_sub
+
+    spacing, n = 2.4, len(forks)
+    cores = [{"name": _short_core(f), "full": f,
+              "y": round((n - 1) / 2 * spacing - i * spacing, 2)}
+             for i, f in enumerate(forks)]
+    return {"cores": cores, "subsystems": subsystems, "intensity": intensity, "max": 1.6}
+
+
 async def write_dataviz(session: AsyncSession, out_dir: str) -> None:
     data = Path(out_dir) / "data"
     data.mkdir(parents=True, exist_ok=True)
@@ -82,3 +119,5 @@ async def write_dataviz(session: AsyncSession, out_dir: str) -> None:
         json.dumps(await build_drift_matrix(session), indent=2), encoding="utf-8")
     (data / "dashboard.json").write_text(
         json.dumps(await build_dashboard(session), indent=2), encoding="utf-8")
+    (data / "frequency.json").write_text(
+        json.dumps(await build_frequency(session), indent=2), encoding="utf-8")
