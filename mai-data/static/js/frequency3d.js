@@ -10,7 +10,9 @@
   if (!wrap || !canvas) return;
 
   var W = wrap.clientWidth, H = wrap.clientHeight || 520;
-  var renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, alpha: true });
+  var renderer;
+  try { renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, alpha: true }); }
+  catch (e) { if (err) err.textContent = '3D view requires WebGL.'; return; }
   renderer.setPixelRatio(window.devicePixelRatio || 1); renderer.setSize(W, H);
   var scene = new THREE.Scene();
   var camera = new THREE.PerspectiveCamera(45, W / H, 0.1, 200);
@@ -22,7 +24,7 @@
     var amp = F.intensity[full] || {}, h = 0;
     for (var i = 0; i < subs.length; i++) {
       var s = subs[i], dx = x - s.x, dz = z - s.z;
-      h += (amp[s.name] || 0) * Math.exp(-(dx * dx + dz * dz) / (2 * SPR * SPR));
+      h += (amp[s.full] || 0) * Math.exp(-(dx * dx + dz * dz) / (2 * SPR * SPR));
     }
     return h + 0.1 * Math.sin(x * 1.25) * Math.cos(z * 1.05);
   }
@@ -61,8 +63,19 @@
     ry += (e.clientX - px) * 0.008; rx += (e.clientY - py) * 0.008;
     rx = Math.max(-1.2, Math.min(1.2, rx)); px = e.clientX; py = e.clientY;
   });
+  canvas.addEventListener('touchstart', function (e) {
+    drag = true; auto = false; px = e.touches[0].clientX; py = e.touches[0].clientY;
+  }, { passive: true });
+  canvas.addEventListener('touchmove', function (e) {
+    if (!drag) return;
+    ry += (e.touches[0].clientX - px) * 0.008; rx += (e.touches[0].clientY - py) * 0.008;
+    rx = Math.max(-1.2, Math.min(1.2, rx));
+    px = e.touches[0].clientX; py = e.touches[0].clientY; e.preventDefault();
+  }, { passive: false });
+  window.addEventListener('touchend', function () { drag = false; });
   window.addEventListener('resize', function () {
     W = wrap.clientWidth; H = wrap.clientHeight || 520;
+    if (W <= 0 || H <= 0) return;
     renderer.setSize(W, H); camera.aspect = W / H; camera.updateProjectionMatrix();
   });
   function animate() {

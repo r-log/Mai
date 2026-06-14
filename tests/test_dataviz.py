@@ -76,7 +76,13 @@ async def test_build_frequency_heightfield(session):
     assert "Object" in names and "shared" in names      # last path segment
     assert all("x" in s and "z" in s for s in f["subsystems"])
     zero_full = next(c["full"] for c in f["cores"] if c["name"] == "Zero")
-    assert f["intensity"][zero_full]["Object"] > 0      # 60/80 -> positive height
+    assert f["intensity"][zero_full]["src/game/Object"] == 1.125   # 60/80 * 1.5
+
+
+async def test_build_frequency_empty_db_is_empty(session):
+    from mai.publish.dataviz import build_frequency
+    f = await build_frequency(session)
+    assert f["cores"] == [] and f["subsystems"] == [] and f["intensity"] == {}
 
 
 async def test_write_dataviz_writes_three_files(session, tmp_path):
