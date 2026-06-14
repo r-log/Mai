@@ -107,6 +107,23 @@ async def _correlate() -> dict:
         return await correlate_all(session, settings.embedding_model)
 
 
+async def _drift() -> int:
+    if not settings.github_token:
+        raise SystemExit("GITHUB_TOKEN not set")
+    import httpx
+
+    from mai.drift.client import GitHubTreeClient
+    from mai.drift.run import compute_drift, default_pairs
+
+    async with httpx.AsyncClient(timeout=120.0) as http:
+        client = GitHubTreeClient(settings.github_token,
+                                  base_url=settings.github_api_url, client=http)
+        async with SessionFactory() as session:
+            pairs = await default_pairs(session)
+            return await compute_drift(session, client, pairs,
+                                       depth=settings.drift_subsystem_depth)
+
+
 async def _ips_crawl() -> int:
     if not settings.firecrawl_api_key:
         raise SystemExit("FIRECRAWL_API_KEY not set")
@@ -138,6 +155,7 @@ def main() -> None:
     sub.add_parser("enrich")
     sub.add_parser("embed")
     sub.add_parser("correlate")
+    sub.add_parser("drift")
     args = parser.parse_args()
 
     if args.cmd == "init-db":
@@ -165,6 +183,9 @@ def main() -> None:
         result = asyncio.run(_correlate())
         print(f"correlate: explicit={result['explicit_edges']} "
               f"embedding={result['embedding_edges']} verified={result['verified']}")
+    elif args.cmd == "drift":
+        rows = asyncio.run(_drift())
+        print(f"drift: {rows} subsystem observations")
 
 
 if __name__ == "__main__":

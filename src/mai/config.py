@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     embedding_api_url: str = "https://openrouter.ai/api"
     embedding_model: str = "openai/text-embedding-3-small"
     embedding_dimensions: int = 1536
+    drift_subsystem_depth: int = 3
 
 
 settings = Settings()
