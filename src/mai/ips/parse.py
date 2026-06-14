@@ -36,13 +36,15 @@ def parse_bug_page(markdown: str) -> IpsBug:
     return IpsBug(
         title=_find(r"^#\s+(.+)$", markdown, re.M) or "",
         status=_find(r"Status:\s*([A-Za-z][A-Za-z ]*)", markdown),
+        # NOTE: main/sub category use greedy (.+) to end-of-line; if Firecrawl ever
+        # strips the trailing newline, switch to lazy (.+?) + a label lookahead.
         main_category=_find(r"Main Category:\*{0,2}\s*(.+)", markdown),
         sub_category=_find(r"Sub-Category:\*{0,2}\s*(.+)", markdown),
         version=_find(
             r"(?<!Implemented )Version:\*{0,2}\s*(.+?)\s*(?:Milestone:|Priority:|$)",
             markdown,
         ),
-        milestone=_find(r"Milestone:\s*(\w+?)(?=Priority:|$)", markdown),
+        milestone=_find(r"Milestone:\s*(\w+?)(?=Priority:|\n|$)", markdown),
         priority=_find(r"Priority:\s*(\w+)", markdown),
         implemented_version=_find(r"Implemented Version:\*{0,2}\s*(\w+)", markdown),
     )

@@ -3,7 +3,7 @@ from typing import Protocol
 
 import httpx
 
-_BUG_URL_RE = re.compile(r"-r\d+/?$")
+_BUG_URL_RE = re.compile(r"/bug-tracker/.+-r\d+/?$")
 
 
 class IpsClient(Protocol):

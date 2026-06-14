@@ -9,4 +9,7 @@ class FakeIpsClient:
         return list(self._urls)
 
     async def fetch_bug(self, url: str) -> str:
-        return self._pages[url]
+        try:
+            return self._pages[url]
+        except KeyError:
+            raise KeyError(f"FakeIpsClient: no page registered for {url!r}") from None
