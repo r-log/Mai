@@ -1,6 +1,7 @@
 :root{
   --fg:#1f2328; --muted:#59636e; --border:#d1d9e0; --canvas:#f6f8fa; --bg:#fff;
   --blue:#0969da; --green:#1a7f37; --amber:#9a6700; --purple:#8250df; --red:#cf222e;
+  --surface:var(--surface);
 }
 *{box-sizing:border-box}
 body{margin:0;font:14px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:var(--fg);background:var(--bg)}
@@ -15,20 +16,20 @@ a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}
 
 /* pills (area) */
 .pill{display:inline-block;font-size:12px;font-weight:600;line-height:20px;padding:0 8px;border-radius:999px;
-  border:1px solid #0000001a;background:#eaeef2;color:var(--muted);margin-right:6px;vertical-align:1px}
+  border:1px solid #0000001a;background:var(--surface);color:var(--muted);margin-right:6px;vertical-align:1px}
 .pill.area-movement{background:#ddf4ff;color:#0969da}.pill.area-spell{background:#fbefff;color:#8250df}
 .pill.area-combat{background:#ffebe9;color:#cf222e}.pill.area-quest{background:#dafbe1;color:#1a7f37}
 .pill.area-loot{background:#fff8c5;color:#7a5c00}.pill.area-item{background:#ffe7d1;color:#bc4c00}
 .pill.area-creature{background:#ffeff7;color:#bf3989}.pill.area-character{background:#efe9fb;color:#6639ba}
-.pill.area-world{background:#d3f3f7;color:#0c7489}.pill.area-database{background:#eaeef2;color:#57606a}
+.pill.area-world{background:#d3f3f7;color:#0c7489}.pill.area-database{background:var(--surface);color:#57606a}
 .pill.area-tools{background:#eaecef;color:#424a53}.pill.area-network{background:#e8e6ff;color:#4f46c4}
-.pill.area-other{background:#eaeef2;color:#59636e}
+.pill.area-other{background:var(--surface);color:#59636e}
 
 /* verdict badges */
 .badge{font-size:12px;font-weight:600;padding:1px 9px;border-radius:999px}
 .b-fixed_confirmed{background:#dafbe1;color:#1a7f37}
 .b-likely_fixed{background:#fff8c5;color:#9a6700}
-.b-open{background:#eaeef2;color:#59636e}
+.b-open{background:var(--surface);color:#59636e}
 
 /* status icon */
 .ico{width:18px;flex:0 0 18px;text-align:center;font-size:15px}
@@ -38,13 +39,16 @@ a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}
 .list-head{display:flex;align-items:baseline;gap:10px;margin-bottom:10px}
 .list-head h1{font-size:20px;margin:0}
 .issue-list{border:1px solid var(--border);border-radius:8px;overflow:hidden}
-.ghrow{display:flex;gap:10px;align-items:flex-start;padding:11px 14px;border-bottom:1px solid #eaeef2}
+.ghrow{display:flex;gap:10px;align-items:flex-start;padding:11px 14px;border-bottom:1px solid var(--surface)}
 .ghrow:last-child{border-bottom:0}
 .ghrow-main{flex:1;min-width:0}
 .ghrow-title{font-weight:600;color:var(--fg)}
 .ghrow-title:hover{color:var(--blue);text-decoration:none}
-.ghrow .badge{float:right;margin-left:8px}
+.ghrow-top{display:flex;align-items:center;gap:8px}
+.ghrow-top .badge{margin-left:auto;flex:0 0 auto}
+.ghrow-title{flex:1;min-width:0}
 .ghrow-meta{color:var(--muted);font-size:12px;margin-top:3px}
+.badge-lg{font-size:13px}
 
 /* issue detail */
 .issue-title{font-size:24px;font-weight:600;margin:0 0 4px}
@@ -52,7 +56,7 @@ a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}
 .issue-grid{display:flex;gap:22px;align-items:flex-start}
 .issue-main{flex:1;min-width:0}
 .issue-side{flex:0 0 220px;font-size:13px}
-.issue-side .srow{padding:8px 0;border-bottom:1px solid #eaeef2;display:flex;justify-content:space-between;gap:8px}
+.issue-side .srow{padding:8px 0;border-bottom:1px solid var(--surface);display:flex;justify-content:space-between;gap:8px}
 .issue-side .k{font-weight:600}
 .callout{border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:13px;border:1px solid}
 .callout.c-fixed_confirmed{background:#dafbe1;border-color:#1a7f37;color:#1a7f37}

@@ -1,8 +1,8 @@
 {{ define "main" }}
   {{ if .Params.verdict }}
     <h1 class="issue-title">
-      <span class="pill area-{{ lower .Params.area }}">{{ .Params.area }}</span>{{ .Title }}
-      <span class="badge b-{{ .Params.verdict }}" style="font-size:13px">{{ .Params.verdict }}</span>
+      {{ with .Params.area }}<span class="pill area-{{ lower . }}">{{ . }}</span>{{ end }}{{ .Title }}
+      <span class="badge b-{{ .Params.verdict }} badge-lg">{{ .Params.verdict }}</span>
     </h1>
     <div class="issue-sub">{{ .Params.core }} · {{ .Params.id }} · status {{ .Params.status }}</div>
     <div class="issue-grid">
@@ -11,7 +11,7 @@
         {{ .Content }}
       </div>
       <aside class="issue-side">
-        <div class="srow"><span class="k">Area</span><span class="pill area-{{ lower .Params.area }}">{{ .Params.area }}</span></div>
+        <div class="srow"><span class="k">Area</span>{{ with .Params.area }}<span class="pill area-{{ lower . }}">{{ . }}</span>{{ else }}<span class="muted">—</span>{{ end }}</div>
         <div class="srow"><span class="k">Core</span><span>{{ .Params.core }}</span></div>
         <div class="srow"><span class="k">Status</span><span>{{ .Params.status }}</span></div>
         <div class="srow"><span class="k">Verdict</span><span>{{ .Params.verdict }}</span></div>

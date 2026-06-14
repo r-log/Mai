@@ -1,3 +1,5 @@
+import re
+
 # Canonical area palette (GitHub-label style: light bg + readable text).
 AREAS = [
     {"name": "Movement",  "slug": "movement",  "color": "#0969da"},
@@ -22,7 +24,7 @@ _KEYWORDS = [
     ("Spell",     ["spell", "aura", "cast", "mana", "cooldown", "rune", "proc", "buff"]),
     ("Combat",    ["combat", "damage", "melee", "threat", "aggro", "agro", "crit",
                    "resil", "pvp", "block", "parry"]),
-    ("Loot",      ["loot", "lootable", "drop ", "corpse", "skinning"]),
+    ("Loot",      ["loot", "lootable", "drop", "corpse", "skinning"]),
     ("Quest",     ["quest", "objective", "gossip", "escort"]),
     ("Item",      ["item", "equip", "enchant", "inventory", "bag", "gem"]),
     ("Creature",  ["creature", "npc", "mob", "pet", "beast", "tame", "vendor",
@@ -43,7 +45,7 @@ _ENTITY_AREA = [("spell", "Spell"), ("npc", "Creature"), ("quest", "Quest"),
 def _match_keywords(text: str) -> str | None:
     text = (text or "").lower()
     for area, kws in _KEYWORDS:
-        if any(kw in text for kw in kws):
+        if any(re.search(r"\b" + re.escape(kw) + r"\b", text) for kw in kws):
             return area
     return None
 

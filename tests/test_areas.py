@@ -26,3 +26,9 @@ def test_area_from_title_keywords():
 
 def test_area_defaults_to_other():
     assert area_of("totally unrelated wording", None, {}) == "Other"
+
+
+def test_area_keyword_boundaries_avoid_substring_false_positives():
+    # "mob" must not match "mobility"; "fly" must not match "firefly"
+    assert area_of("player mobility was reduced", None, {}) == "Other"
+    assert area_of("firefly is not lootable", None, {}) == "Loot"

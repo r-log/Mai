@@ -7,8 +7,10 @@
       <div class="ghrow">
         <span class="ico v-{{ .Params.verdict }}">{{ if eq .Params.verdict "fixed_confirmed" }}&#10004;{{ else if eq .Params.verdict "likely_fixed" }}&#9680;{{ else }}&#9711;{{ end }}</span>
         <div class="ghrow-main">
-          <span class="badge b-{{ .Params.verdict }}">{{ .Params.verdict }}</span>
-          <a class="ghrow-title" href="{{ .RelPermalink }}"><span class="pill area-{{ lower .Params.area }}">{{ .Params.area }}</span>{{ .Title }}</a>
+          <div class="ghrow-top">
+            <a class="ghrow-title" href="{{ .RelPermalink }}">{{ with .Params.area }}<span class="pill area-{{ lower . }}">{{ . }}</span>{{ end }}{{ .Title }}</a>
+            <span class="badge b-{{ .Params.verdict }}">{{ .Params.verdict }}</span>
+          </div>
           <div class="ghrow-meta">{{ .Params.id }} · {{ .Params.core }}</div>
         </div>
       </div>
