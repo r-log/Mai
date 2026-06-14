@@ -116,3 +116,19 @@ class Enrichment(Base):
         UniqueConstraint("report_id", "model", "prompt_version", "schema_version",
                          "input_hash", name="uq_enrichment_key"),
     )
+
+
+class Embedding(Base):
+    """Derived vector for a report's embed-text. Stored as JSON (pgvector swap later)."""
+    __tablename__ = "embedding"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    report_id: Mapped[str] = mapped_column(ForeignKey("report.id"))
+    model: Mapped[str] = mapped_column(String(128))
+    dimensions: Mapped[int] = mapped_column(Integer)
+    input_hash: Mapped[str] = mapped_column(String(64))
+    vector: Mapped[list] = mapped_column(JSON, default=list)
+    created_at: Mapped[datetime] = mapped_column(default=_now)
+
+    __table_args__ = (
+        UniqueConstraint("report_id", "model", "input_hash", name="uq_embedding_key"),
+    )
