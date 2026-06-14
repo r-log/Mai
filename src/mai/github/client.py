@@ -1,0 +1,6 @@
+from typing import Protocol
+
+
+class GitHubClient(Protocol):
+    async def list_issues(self, repo: str, since: str | None = None) -> list[dict]: ...
+    async def list_pulls(self, repo: str, since: str | None = None) -> list[dict]: ...
