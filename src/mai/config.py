@@ -6,6 +6,8 @@ class Settings(BaseSettings):
 
     database_url: str = "sqlite+aiosqlite:///./mai.db"
     ledger_path: str = "./mai-data"
+    github_token: str | None = None
+    github_api_url: str = "https://api.github.com"
 
 
 settings = Settings()
