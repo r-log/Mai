@@ -61,6 +61,25 @@ async def _harvest() -> int:
     return len(repos)
 
 
+async def _enrich() -> int:
+    if not settings.openrouter_api_key:
+        raise SystemExit("OPENROUTER_API_KEY not set")
+    import httpx
+
+    from mai.enrich.enricher import OpenRouterEnricher
+    from mai.enrich_run import enrich_pending
+
+    async with httpx.AsyncClient(timeout=120.0) as http:
+        enricher = OpenRouterEnricher(
+            settings.openrouter_api_key,
+            settings.enrichment_model,
+            base_url=settings.openrouter_api_url,
+            client=http,
+        )
+        async with SessionFactory() as session:
+            return await enrich_pending(session, enricher)
+
+
 async def _ips_crawl() -> int:
     if not settings.firecrawl_api_key:
         raise SystemExit("FIRECRAWL_API_KEY not set")
@@ -89,6 +108,7 @@ def main() -> None:
     rl.add_argument("readme_path")
     sub.add_parser("harvest")
     sub.add_parser("ips-crawl")
+    sub.add_parser("enrich")
     args = parser.parse_args()
 
     if args.cmd == "init-db":
@@ -106,6 +126,9 @@ def main() -> None:
     elif args.cmd == "ips-crawl":
         count = asyncio.run(_ips_crawl())
         print(f"crawled {count} bugs")
+    elif args.cmd == "enrich":
+        count = asyncio.run(_enrich())
+        print(f"enriched {count} reports")
 
 
 if __name__ == "__main__":
