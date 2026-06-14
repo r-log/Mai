@@ -8,6 +8,8 @@ VERDICT_OPEN = "open"
 VERDICT_LIKELY = "likely_fixed"
 VERDICT_CONFIRMED = "fixed_confirmed"
 
+_EMBEDDING_LIKELY_THRESHOLD = 0.7  # min cosine for an embedding edge to a merged PR to imply likely_fixed
+
 _BUG_PREFIXES = ("ips:", "gh_issue:")
 
 
@@ -29,7 +31,7 @@ async def verify_report(session: AsyncSession, report: Report) -> str:
             if verdict != VERDICT_CONFIRMED:
                 verdict = VERDICT_LIKELY
             confidence = max(confidence, 0.7)
-        elif c.method == "embedding" and merged and c.score >= 0.7:
+        elif c.method == "embedding" and merged and c.score >= _EMBEDDING_LIKELY_THRESHOLD:
             if verdict == VERDICT_OPEN:
                 verdict = VERDICT_LIKELY
             confidence = max(confidence, c.score)

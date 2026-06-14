@@ -17,8 +17,12 @@ async def correlate_explicit(session: AsyncSession) -> int:
     edges = 0
     for report in reports:
         text = await crepo.report_text(report)
+        seen = set()
         for full_name, kind, num in _REF_RE.findall(text):
             key = f"{_KIND[kind.lower()]}:{full_name}#{num}"
+            if key in seen:
+                continue
+            seen.add(key)
             related = await crepo.find_report_by_key(key)
             if related is not None and related.id != report.id:
                 await crepo.upsert(report.id, related.id, "explicit_ref", 1.0)

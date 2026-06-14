@@ -144,6 +144,7 @@ class Correlation(Base):
     method: Mapped[str] = mapped_column(String(32))   # explicit_ref | embedding
     score: Mapped[float] = mapped_column(Float)
     created_at: Mapped[datetime] = mapped_column(default=_now)
+    updated_at: Mapped[datetime] = mapped_column(default=_now, onupdate=_now)
 
     __table_args__ = (
         UniqueConstraint("report_id", "related_report_id", "method",
@@ -160,3 +161,4 @@ class Verification(Base):
     confidence: Mapped[float] = mapped_column(Float)
     evidence: Mapped[list] = mapped_column(JSON, default=list)
     created_at: Mapped[datetime] = mapped_column(default=_now)
+    updated_at: Mapped[datetime] = mapped_column(default=_now, onupdate=_now)

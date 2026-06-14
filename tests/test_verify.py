@@ -45,3 +45,20 @@ async def test_no_correlations_is_open(session):
     await session.commit()
     v = await VerificationRepository(session).get(bug.id)
     assert v.verdict == VERDICT_OPEN
+
+
+async def test_gh_issue_report_is_verified(session):
+    await ingest_event(session, IntakeEvent("gh_issue", "zero/server#5", "Issue", "zero",
+                                            raw_payload={"body": "x"}))
+    await ingest_event(session, IntakeEvent("gh_pr", "zero/server#7", "Fix", "zero",
+                                            status="merged", raw_payload={"body": "y"}))
+    await session.commit()
+    rr = ReportRepository(session)
+    issue = await rr.get_report("gh_issue:zero/server#5")
+    pr = await rr.get_report("gh_pr:zero/server#7")
+    await CorrelationRepository(session).upsert(issue.id, pr.id, "explicit_ref", 1.0)
+    await session.commit()
+    await verify_all(session)
+    await session.commit()
+    v = await VerificationRepository(session).get(issue.id)
+    assert v.verdict == VERDICT_CONFIRMED
