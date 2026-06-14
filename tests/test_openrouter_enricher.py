@@ -11,7 +11,7 @@ GOOD = ('{"normalized_title":"Pet threat","english_summary":"Pet loses threat",'
 
 def _ok(request: httpx.Request) -> httpx.Response:
     assert request.headers["Authorization"] == "Bearer or-key"
-    assert request.url.path == "/v1/chat/completions"
+    assert request.url.path == "/api/v1/chat/completions"
     return httpx.Response(200, json={"choices": [{"message": {"content": GOOD}}]})
 
 

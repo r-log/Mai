@@ -17,7 +17,7 @@ class OpenRouterEnricher:
     """Production Enricher backed by OpenRouter chat completions."""
 
     def __init__(self, api_key: str, model: str,
-                 base_url: str = "https://openrouter.ai",
+                 base_url: str = "https://openrouter.ai/api",
                  client: httpx.AsyncClient | None = None):
         self._model = model
         self._base = base_url.rstrip("/")

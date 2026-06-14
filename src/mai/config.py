@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     firecrawl_api_url: str = "https://api.firecrawl.dev"
     ips_bug_tracker_url: str = "https://www.getmangos.eu/bug-tracker/"
     openrouter_api_key: str | None = None
-    openrouter_api_url: str = "https://openrouter.ai"
+    openrouter_api_url: str = "https://openrouter.ai/api"
     enrichment_model: str = "moonshotai/kimi-k2.5"
 
 
