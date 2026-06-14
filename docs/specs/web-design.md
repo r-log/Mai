@@ -1,7 +1,7 @@
 ---
 title: "Mai — Web Design & Visualization"
-status: Draft
-version: 0.1
+status: Built
+version: 1.0
 owners: [r-log]
 related:
   - _spec-template.md
