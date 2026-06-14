@@ -1,0 +1,7 @@
+baseURL = "/"
+languageCode = "en-us"
+title = "Mai — getMaNGOS Bug & Drift Observatory"
+disableKinds = ["taxonomy", "term", "RSS", "sitemap"]
+
+[markup.goldmark.renderer]
+unsafe = true

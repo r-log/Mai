@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ .Title }} · Mai</title>
+  <style>
+    body{font-family:system-ui,sans-serif;max-width:1000px;margin:2rem auto;padding:0 1rem;line-height:1.5}
+    nav a{margin-right:1rem}
+    table{border-collapse:collapse;width:100%}
+    th,td{border:1px solid #ddd;padding:.3rem .5rem;text-align:left}
+    code{background:#f4f4f4;padding:.1rem .3rem;border-radius:3px}
+  </style>
+</head>
+<body>
+  <nav><a href="/">Home</a><a href="/sync/">Drift</a></nav>
+  <hr>
+  {{ block "main" . }}{{ end }}
+</body>
+</html>
