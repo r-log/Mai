@@ -33,3 +33,15 @@ async def test_publish_site_excludes_pr_reports(session, tmp_path):
     await publish_site(session, str(tmp_path))
     # only the home page is written; the PR is not a bug page
     assert not (tmp_path / "content" / "zero" / "bugs").exists()
+
+
+async def test_publish_site_writes_dataviz_json(session, tmp_path):
+    from mai.repository.drift import DriftRepository
+    await ingest_event(session, IntakeEvent("ips", "r1", "Bug", "three",
+                                            raw_payload={"markdown": "x"}))
+    await DriftRepository(session).upsert("mangoszero/server", "mangostwo/server",
+                                          "src/game/Object", STATS)
+    await session.commit()
+    await publish_site(session, str(tmp_path))
+    assert (tmp_path / "data" / "drift.json").exists()
+    assert (tmp_path / "data" / "dashboard.json").exists()

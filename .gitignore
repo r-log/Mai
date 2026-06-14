@@ -5,6 +5,7 @@ __pycache__/
 venv/
 *.db
 mai-data/content/
+mai-data/data/
 mai-data/public/
 mai-data/resources/
 .hugo_build.lock

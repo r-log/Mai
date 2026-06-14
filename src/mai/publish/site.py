@@ -2,6 +2,7 @@ from pathlib import Path
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from mai.publish.dataviz import write_dataviz
 from mai.publish.render import render_drift_page, render_home, render_report_page
 from mai.publish.views import (
     counts, drift_observations_by_pair, iter_bug_reports, report_bundle,
@@ -39,4 +40,5 @@ async def publish_site(session: AsyncSession, out_dir: str) -> int:
                 render_drift_page(fork_a, fork_b, observations), encoding="utf-8")
             written += 1
 
+    await write_dataviz(session, out_dir)
     return written
