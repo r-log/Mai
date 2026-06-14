@@ -1,3 +1,26 @@
 {{ define "main" }}
-  {{ .Content }}
+  {{ if .Params.verdict }}
+    <h1 class="issue-title">
+      <span class="pill area-{{ lower .Params.area }}">{{ .Params.area }}</span>{{ .Title }}
+      <span class="badge b-{{ .Params.verdict }}" style="font-size:13px">{{ .Params.verdict }}</span>
+    </h1>
+    <div class="issue-sub">{{ .Params.core }} · {{ .Params.id }} · status {{ .Params.status }}</div>
+    <div class="issue-grid">
+      <div class="issue-main">
+        <div class="callout c-{{ .Params.verdict }}"><b>{{ .Params.verdict }}</b> — confidence {{ .Params.confidence }}</div>
+        {{ .Content }}
+      </div>
+      <aside class="issue-side">
+        <div class="srow"><span class="k">Area</span><span class="pill area-{{ lower .Params.area }}">{{ .Params.area }}</span></div>
+        <div class="srow"><span class="k">Core</span><span>{{ .Params.core }}</span></div>
+        <div class="srow"><span class="k">Status</span><span>{{ .Params.status }}</span></div>
+        <div class="srow"><span class="k">Verdict</span><span>{{ .Params.verdict }}</span></div>
+        <div class="srow"><span class="k">Confidence</span><span>{{ .Params.confidence }}</span></div>
+        <div class="srow"><span class="k">Source</span><span>{{ .Params.id }}</span></div>
+      </aside>
+    </div>
+  {{ else }}
+    <h1>{{ .Title }}</h1>
+    {{ .Content }}
+  {{ end }}
 {{ end }}

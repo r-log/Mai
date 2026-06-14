@@ -1,9 +1,20 @@
 {{ define "main" }}
+  <div class="list-head"><h1>{{ .Title }}</h1><span class="muted">{{ len .Pages }} items</span></div>
   {{ .Content }}
-  <ul>
-    {{ range .Pages }}
-      <li><a href="{{ .RelPermalink }}">{{ .Title }}</a>
-        {{ with .Params.verdict }}<em>— {{ . }}</em>{{ end }}</li>
+  <div class="issue-list">
+  {{ range .Pages }}
+    {{ if .Params.verdict }}
+      <div class="ghrow">
+        <span class="ico v-{{ .Params.verdict }}">{{ if eq .Params.verdict "fixed_confirmed" }}&#10004;{{ else if eq .Params.verdict "likely_fixed" }}&#9680;{{ else }}&#9711;{{ end }}</span>
+        <div class="ghrow-main">
+          <span class="badge b-{{ .Params.verdict }}">{{ .Params.verdict }}</span>
+          <a class="ghrow-title" href="{{ .RelPermalink }}"><span class="pill area-{{ lower .Params.area }}">{{ .Params.area }}</span>{{ .Title }}</a>
+          <div class="ghrow-meta">{{ .Params.id }} · {{ .Params.core }}</div>
+        </div>
+      </div>
+    {{ else }}
+      <div class="ghrow"><a href="{{ .RelPermalink }}">{{ .Title }}</a></div>
     {{ end }}
-  </ul>
+  {{ end }}
+  </div>
 {{ end }}
