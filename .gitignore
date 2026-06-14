@@ -4,5 +4,8 @@ __pycache__/
 .venv/
 venv/
 *.db
-mai-data/
+mai-data/content/
+mai-data/public/
+mai-data/resources/
+.hugo_build.lock
 .env
