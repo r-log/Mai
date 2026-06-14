@@ -61,6 +61,25 @@ async def _harvest() -> int:
     return len(repos)
 
 
+async def _ips_crawl() -> int:
+    if not settings.firecrawl_api_key:
+        raise SystemExit("FIRECRAWL_API_KEY not set")
+    import httpx
+
+    from mai.ips.client import FirecrawlIpsClient
+    from mai.ips_crawl import crawl_all
+
+    async with httpx.AsyncClient(timeout=60.0) as http:
+        client = FirecrawlIpsClient(
+            settings.firecrawl_api_key,
+            base_url=settings.firecrawl_api_url,
+            bug_tracker_url=settings.ips_bug_tracker_url,
+            client=http,
+        )
+        async with SessionFactory() as session:
+            return await crawl_all(session, client)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(prog="mai")
     sub = parser.add_subparsers(dest="cmd", required=True)
@@ -69,6 +88,7 @@ def main() -> None:
     rl = sub.add_parser("registry-load")
     rl.add_argument("readme_path")
     sub.add_parser("harvest")
+    sub.add_parser("ips-crawl")
     args = parser.parse_args()
 
     if args.cmd == "init-db":
@@ -83,6 +103,9 @@ def main() -> None:
     elif args.cmd == "harvest":
         count = asyncio.run(_harvest())
         print(f"harvested {count} repos")
+    elif args.cmd == "ips-crawl":
+        count = asyncio.run(_ips_crawl())
+        print(f"crawled {count} bugs")
 
 
 if __name__ == "__main__":

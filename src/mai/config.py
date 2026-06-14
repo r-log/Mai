@@ -8,6 +8,9 @@ class Settings(BaseSettings):
     ledger_path: str = "./mai-data"
     github_token: str | None = None
     github_api_url: str = "https://api.github.com"
+    firecrawl_api_key: str | None = None
+    firecrawl_api_url: str = "https://api.firecrawl.dev"
+    ips_bug_tracker_url: str = "https://www.getmangos.eu/bug-tracker/"
 
 
 settings = Settings()
