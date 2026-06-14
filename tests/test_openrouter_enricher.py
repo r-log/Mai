@@ -34,3 +34,14 @@ async def test_openrouter_enricher_raises_on_bad_json():
         enricher = OpenRouterEnricher("or-key", "some/model", client=http)
         with pytest.raises(EnrichmentSchemaError):
             await enricher.enrich(CTX)
+
+
+def _http_error(request: httpx.Request) -> httpx.Response:
+    return httpx.Response(401, json={"error": "unauthorized"})
+
+
+async def test_openrouter_enricher_raises_on_http_error():
+    async with httpx.AsyncClient(transport=httpx.MockTransport(_http_error)) as http:
+        enricher = OpenRouterEnricher("or-key", "some/model", client=http)
+        with pytest.raises(httpx.HTTPStatusError):
+            await enricher.enrich(CTX)

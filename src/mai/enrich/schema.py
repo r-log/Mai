@@ -1,6 +1,7 @@
 import hashlib
 import json
 from dataclasses import dataclass
+from typing import Literal
 
 from pydantic import BaseModel, Field, ValidationError
 
@@ -25,8 +26,8 @@ class EnrichmentResult(BaseModel):
     steps_to_reproduce: list[str] = Field(default_factory=list)
     affected_entities: AffectedEntities = Field(default_factory=AffectedEntities)
     language_detected: str = "unknown"
-    severity_guess: str = "unknown"
-    clarity_score: float = 0.0
+    severity_guess: Literal["low", "medium", "high", "unknown"] = "unknown"
+    clarity_score: float = Field(default=0.0, ge=0.0, le=1.0)
     needs_human_review: bool = False
 
 

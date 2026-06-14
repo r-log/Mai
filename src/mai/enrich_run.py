@@ -31,5 +31,5 @@ async def enrich_pending(session: AsyncSession, enricher: Enricher) -> int:
     for report in reports:
         if await enrich_report(session, enricher, report):
             count += 1
-        await session.commit()
+            await session.commit()
     return count
