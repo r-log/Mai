@@ -3,7 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from mai.db.models import Report
 from mai.enrich.enricher import Enricher
 from mai.enrich.prompt import PROMPT_VERSION
-from mai.enrich.schema import SCHEMA_VERSION
+from mai.enrich.schema import SCHEMA_VERSION, EnrichmentSchemaError
 from mai.repository.enrichment import EnrichmentRepository
 from mai.repository.reports import ReportRepository
 
@@ -26,10 +26,18 @@ async def enrich_report(session: AsyncSession, enricher: Enricher, report: Repor
 
 async def enrich_pending(session: AsyncSession, enricher: Enricher) -> int:
     """Enrich every report lacking a current enrichment. Commits per report (resumable)."""
-    reports = await ReportRepository(session).all_reports()
+    repo = ReportRepository(session)
+    report_ids = [r.id for r in await repo.all_reports()]
     count = 0
-    for report in reports:
-        if await enrich_report(session, enricher, report):
-            count += 1
-            await session.commit()
+    for report_id in report_ids:
+        report = await session.get(Report, report_id)
+        if report is None:
+            continue
+        try:
+            if await enrich_report(session, enricher, report):
+                count += 1
+                await session.commit()
+        except EnrichmentSchemaError:
+            await session.rollback()
+            continue
     return count

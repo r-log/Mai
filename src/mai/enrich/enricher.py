@@ -3,7 +3,7 @@ from typing import Protocol
 import httpx
 
 from mai.enrich.prompt import SYSTEM_PROMPT, build_prompt
-from mai.enrich.schema import EnrichmentInput, EnrichmentResult, parse_enrichment
+from mai.enrich.schema import EnrichmentInput, EnrichmentResult, EnrichmentSchemaError, parse_enrichment
 
 
 class Enricher(Protocol):
@@ -47,5 +47,7 @@ class OpenRouterEnricher:
             headers=self._headers,
         )
         resp.raise_for_status()
-        content = resp.json()["choices"][0]["message"]["content"]
+        content = resp.json()["choices"][0]["message"].get("content")
+        if not content:
+            raise EnrichmentSchemaError("OpenRouter returned empty/null message content")
         return parse_enrichment(content)

@@ -45,3 +45,14 @@ async def test_openrouter_enricher_raises_on_http_error():
         enricher = OpenRouterEnricher("or-key", "some/model", client=http)
         with pytest.raises(httpx.HTTPStatusError):
             await enricher.enrich(CTX)
+
+
+def _null_content(request: httpx.Request) -> httpx.Response:
+    return httpx.Response(200, json={"choices": [{"message": {"content": None}}]})
+
+
+async def test_openrouter_enricher_raises_on_null_content():
+    async with httpx.AsyncClient(transport=httpx.MockTransport(_null_content)) as http:
+        enricher = OpenRouterEnricher("or-key", "some/model", client=http)
+        with pytest.raises(EnrichmentSchemaError):
+            await enricher.enrich(CTX)
