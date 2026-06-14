@@ -162,3 +162,22 @@ class Verification(Base):
     evidence: Mapped[list] = mapped_column(JSON, default=list)
     created_at: Mapped[datetime] = mapped_column(default=_now)
     updated_at: Mapped[datetime] = mapped_column(default=_now, onupdate=_now)
+
+
+class DriftObservation(Base):
+    """Derived per-subsystem divergence between two forks (one row per pair+subsystem)."""
+    __tablename__ = "drift_obs"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    fork_a: Mapped[str] = mapped_column(String(255))
+    fork_b: Mapped[str] = mapped_column(String(255))
+    subsystem: Mapped[str] = mapped_column(String(255))
+    shared: Mapped[int] = mapped_column(Integer, default=0)
+    diverged: Mapped[int] = mapped_column(Integer, default=0)
+    identical: Mapped[int] = mapped_column(Integer, default=0)
+    only_a: Mapped[int] = mapped_column(Integer, default=0)
+    only_b: Mapped[int] = mapped_column(Integer, default=0)
+    observed_at: Mapped[datetime] = mapped_column(default=_now, onupdate=_now)
+
+    __table_args__ = (
+        UniqueConstraint("fork_a", "fork_b", "subsystem", name="uq_drift_obs"),
+    )
