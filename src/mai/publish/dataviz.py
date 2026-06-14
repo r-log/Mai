@@ -6,15 +6,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from mai.db.models import DriftObservation, Verification
 from mai.publish.areas import AREAS
+from mai.publish.slug import safe_slug
 from mai.publish.views import counts, iter_bug_reports, report_bundle
 from mai.repository.reports import ReportRepository
 
 _AREA_COLOR = {a["name"]: a["color"] for a in AREAS}
 _STOPS = [(0x2e, 0xa0, 0x43), (0xd2, 0x99, 0x22), (0xf8, 0x51, 0x49)]  # green, amber, red
-
-
-def _safe(key: str) -> str:
-    return key.replace(":", "-").replace("/", "-").replace("#", "-")
 
 
 def _short_core(full_name: str) -> str:
@@ -71,9 +68,10 @@ async def build_dashboard(session: AsyncSession) -> dict:
         rep = await rr.get_by_id(v.report_id)
         if rep is None:
             continue
-        related = v.evidence[0]["related"] if v.evidence else ""
+        related = (v.evidence[0].get("related", "")
+                   if v.evidence and isinstance(v.evidence[0], dict) else "")
         fixed.append({"id": rep.canonical_key, "title": rep.title, "core": rep.core,
-                      "related": related, "url": f"/{rep.core}/bugs/{_safe(rep.canonical_key)}/"})
+                      "related": related, "url": f"/{rep.core}/bugs/{safe_slug(rep.canonical_key)}/"})
     return {"stats": stats, "top_areas": top_areas, "recently_fixed": fixed}
 
 

@@ -4,13 +4,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from mai.publish.dataviz import write_dataviz
 from mai.publish.render import render_drift_page, render_home, render_report_page
+from mai.publish.slug import safe_slug
 from mai.publish.views import (
     counts, drift_observations_by_pair, iter_bug_reports, report_bundle,
 )
-
-
-def _safe(key: str) -> str:
-    return key.replace(":", "-").replace("/", "-").replace("#", "-")
 
 
 async def publish_site(session: AsyncSession, out_dir: str) -> int:
@@ -26,7 +23,7 @@ async def publish_site(session: AsyncSession, out_dir: str) -> int:
         bundle = await report_bundle(session, report)
         target = content / report.core / "bugs"
         target.mkdir(parents=True, exist_ok=True)
-        (target / f"{_safe(report.canonical_key)}.md").write_text(
+        (target / f"{safe_slug(report.canonical_key)}.md").write_text(
             render_report_page(bundle), encoding="utf-8")
         written += 1
 
@@ -35,7 +32,7 @@ async def publish_site(session: AsyncSession, out_dir: str) -> int:
         sync = content / "sync"
         sync.mkdir(parents=True, exist_ok=True)
         for (fork_a, fork_b), observations in pairs.items():
-            slug = f"{_safe(fork_a)}--vs--{_safe(fork_b)}"
+            slug = f"{safe_slug(fork_a)}--vs--{safe_slug(fork_b)}"
             (sync / f"{slug}.md").write_text(
                 render_drift_page(fork_a, fork_b, observations), encoding="utf-8")
             written += 1

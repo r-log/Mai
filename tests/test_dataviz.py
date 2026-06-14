@@ -30,6 +30,16 @@ async def test_build_drift_matrix_aggregates_and_colors(session):
     assert any(c.get("self") for row in m["rows"] for c in row["cells"])
 
 
+async def test_build_drift_matrix_keeps_zero_divergence_as_value(session):
+    d = DriftRepository(session)
+    await d.upsert("mangoszero/server", "mangostwo/server", "src/shared",
+                   {"shared": 10, "diverged": 0, "identical": 10, "only_a": 0, "only_b": 0})
+    await session.commit()
+    m = await build_drift_matrix(session)
+    cells = [c for row in m["rows"] for c in row["cells"] if not c.get("self")]
+    assert any(c.get("value") == 0 for c in cells)  # 0% is a real value, not None
+
+
 async def test_build_dashboard_summarizes(session):
     await ingest_event(session, IntakeEvent("ips", "r1", "Pet bug", "three",
                                             raw_payload={"markdown": "x"}))

@@ -24,7 +24,7 @@
             <tr><td class="hm-l">{{ .core }}</td>
               {{ range .cells }}
                 {{ if .self }}<td class="hm-c na">—</td>
-                {{ else if .value }}<td class="hm-c" style="background:{{ .color }}">{{ .value }}</td>
+                {{ else if ne .value nil }}<td class="hm-c" style="background:{{ .color }}">{{ .value }}</td>
                 {{ else }}<td class="hm-c na"></td>{{ end }}
               {{ end }}
             </tr>
