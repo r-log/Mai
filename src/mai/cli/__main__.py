@@ -100,6 +100,13 @@ async def _embed() -> int:
             return await embed_pending(session, embedder)
 
 
+async def _correlate() -> dict:
+    from mai.correlate.run import correlate_all
+
+    async with SessionFactory() as session:
+        return await correlate_all(session, settings.embedding_model)
+
+
 async def _ips_crawl() -> int:
     if not settings.firecrawl_api_key:
         raise SystemExit("FIRECRAWL_API_KEY not set")
@@ -130,6 +137,7 @@ def main() -> None:
     sub.add_parser("ips-crawl")
     sub.add_parser("enrich")
     sub.add_parser("embed")
+    sub.add_parser("correlate")
     args = parser.parse_args()
 
     if args.cmd == "init-db":
@@ -153,6 +161,10 @@ def main() -> None:
     elif args.cmd == "embed":
         count = asyncio.run(_embed())
         print(f"embedded {count} reports")
+    elif args.cmd == "correlate":
+        result = asyncio.run(_correlate())
+        print(f"correlate: explicit={result['explicit_edges']} "
+              f"embedding={result['embedding_edges']} verified={result['verified']}")
 
 
 if __name__ == "__main__":
