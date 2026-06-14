@@ -75,3 +75,17 @@ class Event(Base):
     kind: Mapped[str] = mapped_column(String(32))   # ingested | status_changed | retracted
     payload: Mapped[dict] = mapped_column(JSON, default=dict)
     observed_at: Mapped[datetime] = mapped_column(default=_now)
+
+
+class SyncCursor(Base):
+    """Per-repo, per-source incremental fetch cursor (temporal)."""
+    __tablename__ = "sync_cursor"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    repo_full_name: Mapped[str] = mapped_column(String(255))
+    source_type: Mapped[str] = mapped_column(String(32))
+    last_updated_at: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(default=_now, onupdate=_now)
+
+    __table_args__ = (
+        UniqueConstraint("repo_full_name", "source_type", name="uq_sync_cursor"),
+    )
