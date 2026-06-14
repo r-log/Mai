@@ -34,7 +34,9 @@ def _find(pattern: str, text: str, flags: int = 0) -> str | None:
 def parse_bug_page(markdown: str) -> IpsBug:
     """Best-effort extraction of the labeled IPS fields from page markdown."""
     return IpsBug(
-        title=_find(r"^#\s+(.+)$", markdown, re.M) or "",
+        # Title is an H1, but Firecrawl renders it as a list item ("- # Title")
+        # on live pages; allow an optional leading list marker.
+        title=_find(r"^[-*]?\s*#\s+(.+)$", markdown, re.M) or "",
         status=_find(r"Status:\s*([A-Za-z][A-Za-z ]*)", markdown),
         # NOTE: main/sub category use greedy (.+) to end-of-line; if Firecrawl ever
         # strips the trailing newline, switch to lazy (.+?) + a label lookahead.
