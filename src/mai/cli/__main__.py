@@ -5,7 +5,6 @@ from pathlib import Path
 from mai.config import settings
 from mai.db.base import Base
 from mai.db.session import SessionFactory, engine
-from mai.publish.markdown import report_to_markdown
 from mai.repository.reports import ReportRepository
 from mai.repository.repos import RepoRepository
 from mai.sources.registry import parse_registry
@@ -17,18 +16,10 @@ async def _init_db() -> None:
 
 
 async def _publish() -> int:
-    out = Path(settings.ledger_path) / "content"
+    from mai.publish.site import publish_site
+
     async with SessionFactory() as session:
-        repo = ReportRepository(session)
-        reports = await repo.all_reports()
-        for report in reports:
-            keys = await repo.source_keys_for(report.id)
-            target = out / report.core / "bugs"
-            target.mkdir(parents=True, exist_ok=True)
-            (target / f"{report.canonical_key.replace(':', '-')}.md").write_text(
-                report_to_markdown(report, keys), encoding="utf-8"
-            )
-    return len(reports)
+        return await publish_site(session, settings.ledger_path)
 
 
 async def _registry_load(readme_path: str) -> int:
@@ -163,7 +154,7 @@ def main() -> None:
         print("db initialized")
     elif args.cmd == "publish":
         count = asyncio.run(_publish())
-        print(f"published {count} reports")
+        print(f"published {count} pages")
     elif args.cmd == "registry-load":
         count = asyncio.run(_registry_load(args.readme_path))
         print(f"loaded {count} repos")
