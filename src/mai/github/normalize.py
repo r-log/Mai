@@ -1,4 +1,5 @@
 from mai.contracts import IntakeEvent
+from mai.github.constants import SOURCE_GH_ISSUE, SOURCE_GH_PR
 
 
 def normalize_issue(repo_full_name: str, core: str, item: dict) -> IntakeEvent | None:
@@ -6,7 +7,7 @@ def normalize_issue(repo_full_name: str, core: str, item: dict) -> IntakeEvent |
     if "pull_request" in item:
         return None
     return IntakeEvent(
-        source_type="gh_issue",
+        source_type=SOURCE_GH_ISSUE,
         source_id=f"{repo_full_name}#{item['number']}",
         title=item["title"],
         core=core,
@@ -20,7 +21,7 @@ def normalize_pull(repo_full_name: str, core: str, item: dict) -> IntakeEvent:
     """Map a GitHub pull request to an IntakeEvent."""
     status = "merged" if item.get("merged_at") else item["state"]
     return IntakeEvent(
-        source_type="gh_pr",
+        source_type=SOURCE_GH_PR,
         source_id=f"{repo_full_name}#{item['number']}",
         title=item["title"],
         core=core,

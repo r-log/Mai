@@ -53,6 +53,7 @@ async def test_harvest_is_incremental_on_second_run(session):
     await harvest_repo(session, client, _repo())
     await session.commit()
     before = await session.scalar(select(func.count()).select_from(SourceRecord))
+    # FakeGitHubClient holds a reference to this list, so the append feeds run #2
     issues.append({"number": 3, "title": "Bug C", "state": "open",
                    "updated_at": "2026-05-01T00:00:00Z"})
     await harvest_repo(session, client, _repo())

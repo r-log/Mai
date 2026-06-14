@@ -57,7 +57,7 @@ async def _harvest() -> int:
             repos = await RepoRepository(session).all()
             for repo in repos:
                 await harvest_repo(session, client, repo)
-            await session.commit()
+                await session.commit()
     return len(repos)
 
 
