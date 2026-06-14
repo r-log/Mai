@@ -1,0 +1,6 @@
+from typing import Protocol
+
+
+class IpsClient(Protocol):
+    async def list_bug_urls(self) -> list[str]: ...
+    async def fetch_bug(self, url: str) -> str: ...
