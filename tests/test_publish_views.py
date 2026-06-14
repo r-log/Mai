@@ -37,6 +37,7 @@ async def test_report_bundle_gathers_everything(session):
     assert b.enrichment["normalized_title"] == "Pet threat"
     assert b.verification.verdict == "fixed_confirmed"
     assert b.correlations == [("gh_pr:zero/server#7", "explicit_ref", 1.0)]
+    assert b.area == "Creature"  # "Pet bug" title -> pet -> Creature
 
 
 async def test_iter_bug_reports_excludes_prs(session):

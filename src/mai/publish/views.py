@@ -3,7 +3,10 @@ from dataclasses import dataclass
 from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from mai.db.models import DriftObservation, Enrichment, Report, Verification
+from mai.db.models import (
+    DriftObservation, Enrichment, Report, ReportSourceMap, SourceRecord, Verification,
+)
+from mai.publish.areas import area_of
 from mai.repository.correlation import CorrelationRepository, VerificationRepository
 from mai.repository.reports import ReportRepository
 
@@ -16,6 +19,7 @@ class ReportBundle:
     enrichment: dict | None
     verification: Verification | None
     correlations: list[tuple[str, str, float]]
+    area: str
 
 
 async def report_bundle(session: AsyncSession, report: Report) -> ReportBundle:
@@ -30,9 +34,21 @@ async def report_bundle(session: AsyncSession, report: Report) -> ReportBundle:
         related = await rr.get_by_id(c.related_report_id)
         key = related.canonical_key if related else c.related_report_id
         corrs.append((key, c.method, c.score))
-    return ReportBundle(report=report,
-                        enrichment=enr.result if enr else None,
-                        verification=ver, correlations=corrs)
+    payload: dict = {}
+    maps = list(await session.scalars(
+        select(ReportSourceMap).where(ReportSourceMap.report_id == report.id)))
+    for m in maps:
+        rec = await session.scalar(
+            select(SourceRecord)
+            .where(SourceRecord.source_type == m.source_type,
+                   SourceRecord.source_id == m.source_id)
+            .order_by(desc(SourceRecord.version)).limit(1))
+        if rec is not None:
+            payload = rec.payload
+            break
+    area = area_of(report.title, enr.result if enr else None, payload)
+    return ReportBundle(report=report, enrichment=enr.result if enr else None,
+                        verification=ver, correlations=corrs, area=area)
 
 
 async def iter_bug_reports(session: AsyncSession) -> list[Report]:

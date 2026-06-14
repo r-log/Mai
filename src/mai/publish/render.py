@@ -18,29 +18,25 @@ def render_report_page(bundle: ReportBundle) -> str:
     confidence = ver.confidence if ver else 0.0
 
     lines = ["---", f"schema_version: {SCHEMA_VERSION}", f"id: {_q(r.canonical_key)}",
-             f"title: {_q(title)}", f"core: {r.core}", f"status: {r.status}",
-             f"verdict: {verdict}", f"confidence: {confidence}", "---", "",
-             f"# {title}", "", f"**Verdict:** {verdict} (confidence {confidence})", ""]
+             f"title: {_q(title)}", f"core: {r.core}", f"area: {bundle.area}",
+             f"status: {r.status}", f"verdict: {verdict}", f"confidence: {confidence}",
+             "---", ""]
 
     summary = enr.get("english_summary")
     if summary:
         lines += ["## Summary", "", summary, ""]
-
     steps = enr.get("steps_to_reproduce") or []
     if steps:
         lines += ["## Steps to reproduce", ""] + [f"- {s}" for s in steps] + [""]
-
     entities = enr.get("affected_entities") or {}
     ent_lines = [f"- **{k}:** {', '.join(v)}" for k, v in entities.items() if v]
     if ent_lines:
         lines += ["## Affected", ""] + ent_lines + [""]
-
     if bundle.correlations:
         lines += ["## Evidence", ""]
         lines += [f"- `{key}` ({method}, score {score:.2f})"
                   for key, method, score in bundle.correlations]
         lines += [""]
-
     return "\n".join(lines).rstrip() + "\n"
 
 

@@ -6,6 +6,7 @@ from mai.publish.views import ReportBundle
 def _bundle(**kw):
     base = dict(
         report=Report(canonical_key="ips:r1", core="zero", title="Raw title", status="completed"),
+        area="Loot",
         enrichment={"normalized_title": "Pet threat", "english_summary": "Pet loses threat.",
                     "steps_to_reproduce": ["attack", "send pet"],
                     "affected_entities": {"npc": ["Devilsaur"], "zone": []}},
@@ -21,21 +22,24 @@ def test_render_report_page_full():
     assert md.startswith("---\n")
     assert "schema_version: 2" in md
     assert 'id: "ips:r1"' in md
-    assert 'title: "Pet threat"' in md          # enriched title wins over raw
+    assert 'title: "Pet threat"' in md
+    assert "area: Loot" in md
     assert "verdict: fixed_confirmed" in md
     assert "confidence: 0.95" in md
     assert "## Summary" in md and "Pet loses threat." in md
     assert "## Steps to reproduce" in md and "- attack" in md
-    assert "**npc:** Devilsaur" in md            # empty zone list omitted
-    assert "## Evidence" in md
-    assert "`gh_pr:zero/server#7` (explicit_ref, score 1.00)" in md
+    assert "**npc:** Devilsaur" in md
+    assert "## Evidence" in md and "`gh_pr:zero/server#7`" in md
+    assert "# Pet threat" not in md          # title is template chrome now, not body
+    assert "**Verdict:**" not in md          # verdict is template chrome now
 
 
 def test_render_report_page_minimal_falls_back_to_raw_title():
     md = render_report_page(_bundle(enrichment=None, verification=None, correlations=[]))
     assert 'title: "Raw title"' in md
     assert "verdict: open" in md
-    assert "## Summary" not in md               # nothing to summarize
+    assert "area: Loot" in md
+    assert "## Summary" not in md
 
 
 def test_render_drift_page_sorts_by_diverged():
