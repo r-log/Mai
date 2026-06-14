@@ -28,3 +28,4 @@ def test_compare_trees_counts_identical_diverged_and_unique():
     assert (shared["shared"], shared["identical"]) == (1, 1)
     root = stats["(root)"]
     assert (root["only_a"], root["only_b"]) == (1, 1)
+    assert root["shared"] == 0

@@ -6,17 +6,17 @@ def subsystem_of(path: str, depth: int = 3) -> str:
     return "/".join(parts[:-1][:depth])
 
 
-def _blank() -> dict:
+def _blank() -> dict[str, int]:
     return {"shared": 0, "diverged": 0, "identical": 0, "only_a": 0, "only_b": 0}
 
 
 def compare_trees(tree_a: dict[str, str], tree_b: dict[str, str],
-                  depth: int = 3) -> dict[str, dict]:
+                  depth: int = 3) -> dict[str, dict[str, int]]:
     """Per-subsystem counts of identical/diverged/unique files between two trees.
 
     Trees map path -> git blob SHA; equal SHA means byte-identical content.
     """
-    stats: dict[str, dict] = {}
+    stats: dict[str, dict[str, int]] = {}
     for path in set(tree_a) | set(tree_b):
         bucket = stats.setdefault(subsystem_of(path, depth), _blank())
         in_a, in_b = path in tree_a, path in tree_b

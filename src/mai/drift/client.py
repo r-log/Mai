@@ -31,6 +31,12 @@ class GitHubTreeClient:
         )
         resp.raise_for_status()
         data = resp.json()
+        if data.get("truncated"):
+            import warnings
+            warnings.warn(
+                f"GitHub tree for {repo!r} was truncated; drift counts are partial.",
+                stacklevel=2,
+            )
         return {item["path"]: item["sha"]
                 for item in data.get("tree", [])
                 if item.get("type") == "blob"}

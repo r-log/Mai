@@ -12,7 +12,7 @@ async def test_compute_drift_stores_per_subsystem(session):
     n = await compute_drift(session, client,
                             [("mangoszero/server", "mangostwo/server")], depth=3)
     await session.commit()
-    assert n >= 1
+    assert n == 2
     rows = {r.subsystem: r for r in
             await DriftRepository(session).for_pair("mangoszero/server", "mangostwo/server")}
     assert rows["src/game/Object"].diverged == 1

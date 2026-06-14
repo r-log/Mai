@@ -11,7 +11,7 @@ class DriftRepository:
         self._session = session
 
     async def upsert(self, fork_a: str, fork_b: str, subsystem: str,
-                     stats: dict) -> None:
+                     stats: dict[str, int]) -> None:
         existing = await self._session.scalar(
             select(DriftObservation).where(
                 DriftObservation.fork_a == fork_a,

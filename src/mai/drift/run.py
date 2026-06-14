@@ -19,7 +19,7 @@ async def compute_drift(session: AsyncSession, client: TreeClient,
         for subsystem, stats in compare_trees(tree_a, tree_b, depth).items():
             await drepo.upsert(fork_a, fork_b, subsystem, stats)
             rows += 1
-        await session.commit()
+        await session.commit()  # one commit per pair; re-run is safe (idempotent upsert)
     return rows
 
 
