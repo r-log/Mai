@@ -1,0 +1,36 @@
+import httpx
+import pytest
+
+from mai.enrich.enricher import OpenRouterEnricher
+from mai.enrich.schema import EnrichmentInput, EnrichmentResult, EnrichmentSchemaError
+
+CTX = EnrichmentInput(title="Pet bug", core="zero", source_type="ips", raw_text="threat bug")
+GOOD = ('{"normalized_title":"Pet threat","english_summary":"Pet loses threat",'
+        '"language_detected":"en"}')
+
+
+def _ok(request: httpx.Request) -> httpx.Response:
+    assert request.headers["Authorization"] == "Bearer or-key"
+    assert request.url.path == "/v1/chat/completions"
+    return httpx.Response(200, json={"choices": [{"message": {"content": GOOD}}]})
+
+
+def _bad_json(request: httpx.Request) -> httpx.Response:
+    return httpx.Response(200, json={"choices": [{"message": {"content": "{not json"}}]})
+
+
+async def test_openrouter_enricher_returns_validated_result():
+    async with httpx.AsyncClient(transport=httpx.MockTransport(_ok)) as http:
+        enricher = OpenRouterEnricher("or-key", "some/model", client=http)
+        result = await enricher.enrich(CTX)
+    assert isinstance(result, EnrichmentResult)
+    assert result.normalized_title == "Pet threat"
+    assert result.language_detected == "en"
+    assert enricher.model == "some/model"
+
+
+async def test_openrouter_enricher_raises_on_bad_json():
+    async with httpx.AsyncClient(transport=httpx.MockTransport(_bad_json)) as http:
+        enricher = OpenRouterEnricher("or-key", "some/model", client=http)
+        with pytest.raises(EnrichmentSchemaError):
+            await enricher.enrich(CTX)
