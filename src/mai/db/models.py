@@ -1,7 +1,15 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import ForeignKey, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy import (
+    Boolean,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.types import JSON
 
@@ -88,4 +96,23 @@ class SyncCursor(Base):
 
     __table_args__ = (
         UniqueConstraint("repo_full_name", "source_type", name="uq_sync_cursor"),
+    )
+
+
+class Enrichment(Base):
+    """Derived, recomputable AI-structured view of a report. Beside the raw, never over it."""
+    __tablename__ = "enrichment"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    report_id: Mapped[str] = mapped_column(ForeignKey("report.id"))
+    model: Mapped[str] = mapped_column(String(128))
+    prompt_version: Mapped[int] = mapped_column(Integer)
+    schema_version: Mapped[int] = mapped_column(Integer)
+    input_hash: Mapped[str] = mapped_column(String(64))
+    result: Mapped[dict] = mapped_column(JSON, default=dict)
+    needs_human_review: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(default=_now)
+
+    __table_args__ = (
+        UniqueConstraint("report_id", "model", "prompt_version", "schema_version",
+                         "input_hash", name="uq_enrichment_key"),
     )
