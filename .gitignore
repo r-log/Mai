@@ -8,4 +8,5 @@ mai-data/content/
 mai-data/public/
 mai-data/resources/
 .hugo_build.lock
+.superpowers/
 .env
