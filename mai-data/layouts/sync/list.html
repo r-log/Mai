@@ -1,0 +1,19 @@
+{{ define "main" }}
+  <h1>Cross-core drift</h1>
+  <p class="muted">Each layer is a core; the surface rises where that core diverges most per subsystem. Drag to rotate.</p>
+
+  <div id="freq" class="freq-hero">
+    <canvas id="freq-c"></canvas>
+    <div id="freq-err" class="freq-err"></div>
+    <div class="freq-legend">low <span class="hm-grad"></span> high divergence · drag to rotate</div>
+  </div>
+
+  <script>window.MAI_FREQ = {{ with .Site.Data.frequency }}{{ . | jsonify }}{{ else }}null{{ end }};</script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="/js/frequency3d.js"></script>
+
+  <h2 style="margin-top:22px">Per-pair drift</h2>
+  <ul class="core-list">
+    {{ range .Pages }}<li><a href="{{ .RelPermalink }}">{{ .Title }}</a></li>{{ end }}
+  </ul>
+{{ end }}
