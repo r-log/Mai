@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy import (
     Boolean,
+    Float,
     ForeignKey,
     Integer,
     String,
@@ -132,3 +133,30 @@ class Embedding(Base):
     __table_args__ = (
         UniqueConstraint("report_id", "model", "input_hash", name="uq_embedding_key"),
     )
+
+
+class Correlation(Base):
+    """Derived edge: report_id (a bug) is related to related_report_id (a PR/issue)."""
+    __tablename__ = "correlation"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    report_id: Mapped[str] = mapped_column(ForeignKey("report.id"))
+    related_report_id: Mapped[str] = mapped_column(ForeignKey("report.id"))
+    method: Mapped[str] = mapped_column(String(32))   # explicit_ref | embedding
+    score: Mapped[float] = mapped_column(Float)
+    created_at: Mapped[datetime] = mapped_column(default=_now)
+
+    __table_args__ = (
+        UniqueConstraint("report_id", "related_report_id", "method",
+                         name="uq_correlation"),
+    )
+
+
+class Verification(Base):
+    """Derived verdict for a bug report. One current row per report (upserted)."""
+    __tablename__ = "verification"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    report_id: Mapped[str] = mapped_column(ForeignKey("report.id"), unique=True)
+    verdict: Mapped[str] = mapped_column(String(32))   # open | likely_fixed | fixed_confirmed
+    confidence: Mapped[float] = mapped_column(Float)
+    evidence: Mapped[list] = mapped_column(JSON, default=list)
+    created_at: Mapped[datetime] = mapped_column(default=_now)

@@ -72,3 +72,6 @@ class ReportRepository:
             select(ReportSourceMap).where(ReportSourceMap.report_id == report_id)
         )
         return [f"{m.source_type}:{m.source_id}" for m in rows]
+
+    async def get_by_id(self, report_id: str) -> "Report | None":
+        return await self._session.scalar(select(Report).where(Report.id == report_id))
