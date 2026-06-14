@@ -18,7 +18,9 @@ class EmbeddingRepository:
         )
         if enr is not None:
             r = enr.result
-            return f"{r.get('normalized_title', '')}\n{r.get('english_summary', '')}".strip()
+            text = f"{r.get('normalized_title', '')}\n{r.get('english_summary', '')}".strip()
+            if text:
+                return text
         return report.title
 
     async def exists(self, report_id: str, model: str, input_hash: str) -> bool:

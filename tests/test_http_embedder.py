@@ -1,3 +1,5 @@
+import json
+
 import httpx
 import pytest
 
@@ -7,6 +9,10 @@ from mai.embed.embedder import HttpEmbedder
 def _ok(request: httpx.Request) -> httpx.Response:
     assert request.headers["Authorization"] == "Bearer emb-key"
     assert request.url.path == "/v1/embeddings"
+    body = json.loads(request.content)
+    assert body["model"] == "text-embedding-3-small"
+    assert body["input"] == "hello"
+    assert body["dimensions"] == 3
     return httpx.Response(200, json={"data": [{"embedding": [0.1, 0.2, 0.3]}]})
 
 
