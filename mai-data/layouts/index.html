@@ -1,11 +1,70 @@
 {{ define "main" }}
-  {{ .Content }}
-  <h2>Cores</h2>
-  <ul>
-    {{ range .Site.Sections }}
-      {{ if ne .Section "sync" }}
-        <li><a href="{{ .RelPermalink }}">{{ .Title }}</a> ({{ len .Pages }})</li>
+  {{ $d := .Site.Data.dashboard }}
+  {{ $drift := .Site.Data.drift }}
+  <h1>getMaNGOS Bug &amp; Drift Observatory</h1>
+
+  {{ with $d }}
+  <div class="stats">
+    <div class="stat"><div class="n">{{ .stats.reports }}</div><div class="l">Reports</div></div>
+    <div class="stat g"><div class="n">{{ .stats.fixed_confirmed }}</div><div class="l">Fixed</div></div>
+    <div class="stat y"><div class="n">{{ .stats.likely_fixed }}</div><div class="l">Likely fixed</div></div>
+    <div class="stat"><div class="n">{{ .stats.open }}</div><div class="l">Open</div></div>
+    <div class="stat b"><div class="n">{{ .stats.drift_pairs }}</div><div class="l">Drift pairs</div></div>
+  </div>
+  {{ end }}
+
+  <div class="dash-grid">
+    <div class="panel">
+      <div class="panel-h">Cross-core drift — % of shared files diverged</div>
+      <div class="panel-b">
+        {{ with $drift }}
+        <table class="hm">
+          <tr><th></th>{{ range .cores }}<th>{{ . }}</th>{{ end }}</tr>
+          {{ range .rows }}
+            <tr><td class="hm-l">{{ .core }}</td>
+              {{ range .cells }}
+                {{ if .self }}<td class="hm-c na">—</td>
+                {{ else if .value }}<td class="hm-c" style="background:{{ .color }}">{{ .value }}</td>
+                {{ else }}<td class="hm-c na"></td>{{ end }}
+              {{ end }}
+            </tr>
+          {{ end }}
+        </table>
+        <div class="hm-legend">low <span class="hm-grad"></span> high divergence</div>
+        {{ else }}<p class="muted">No drift data yet — run <code>mai drift</code>.</p>{{ end }}
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-h">Top areas</div>
+      <div class="panel-b">
+        {{ range $d.top_areas }}
+          <div class="brow">
+            <span class="pill" style="background:{{ .color }}1f;color:{{ .color }};border-color:{{ .color }}3a">{{ .name }}</span>
+            <span class="bar" style="width:{{ mul .count 10 }}px;background:{{ .color }}"></span>
+            <span class="muted">{{ .count }}</span>
+          </div>
+        {{ end }}
+      </div>
+    </div>
+  </div>
+
+  <div class="panel" style="margin-top:16px">
+    <div class="panel-h">Recently confirmed fixed</div>
+    <div class="panel-b">
+      {{ range $d.recently_fixed }}
+        <div class="rfix">&#10004; <a href="{{ .url }}">{{ .title }}</a>
+          <span class="muted">— {{ .id }} → {{ .related }}</span></div>
+      {{ else }}
+        <p class="muted">No confirmed fixes yet.</p>
       {{ end }}
-    {{ end }}
+    </div>
+  </div>
+
+  <h2 style="margin-top:22px">Cores</h2>
+  <ul class="core-list">
+    {{ range .Site.Sections }}{{ if ne .Section "sync" }}
+      <li><a href="{{ .RelPermalink }}">{{ .Title }}</a> <span class="muted">({{ len .Pages }})</span></li>
+    {{ end }}{{ end }}
   </ul>
 {{ end }}
