@@ -80,6 +80,26 @@ async def _enrich() -> int:
             return await enrich_pending(session, enricher)
 
 
+async def _embed() -> int:
+    if not settings.embedding_api_key:
+        raise SystemExit("EMBEDDING_API_KEY not set")
+    import httpx
+
+    from mai.embed.embedder import HttpEmbedder
+    from mai.embed_run import embed_pending
+
+    async with httpx.AsyncClient(timeout=120.0) as http:
+        embedder = HttpEmbedder(
+            settings.embedding_api_key,
+            settings.embedding_model,
+            settings.embedding_dimensions,
+            base_url=settings.embedding_api_url,
+            client=http,
+        )
+        async with SessionFactory() as session:
+            return await embed_pending(session, embedder)
+
+
 async def _ips_crawl() -> int:
     if not settings.firecrawl_api_key:
         raise SystemExit("FIRECRAWL_API_KEY not set")
@@ -109,6 +129,7 @@ def main() -> None:
     sub.add_parser("harvest")
     sub.add_parser("ips-crawl")
     sub.add_parser("enrich")
+    sub.add_parser("embed")
     args = parser.parse_args()
 
     if args.cmd == "init-db":
@@ -129,6 +150,9 @@ def main() -> None:
     elif args.cmd == "enrich":
         count = asyncio.run(_enrich())
         print(f"enriched {count} reports")
+    elif args.cmd == "embed":
+        count = asyncio.run(_embed())
+        print(f"embedded {count} reports")
 
 
 if __name__ == "__main__":
