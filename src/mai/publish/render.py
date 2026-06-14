@@ -17,7 +17,7 @@ def render_report_page(bundle: ReportBundle) -> str:
     verdict = ver.verdict if ver else "open"
     confidence = ver.confidence if ver else 0.0
 
-    lines = ["---", f"schema_version: {SCHEMA_VERSION}", f"id: {r.canonical_key}",
+    lines = ["---", f"schema_version: {SCHEMA_VERSION}", f"id: {_q(r.canonical_key)}",
              f"title: {_q(title)}", f"core: {r.core}", f"status: {r.status}",
              f"verdict: {verdict}", f"confidence: {confidence}", "---", "",
              f"# {title}", "", f"**Verdict:** {verdict} (confidence {confidence})", ""]

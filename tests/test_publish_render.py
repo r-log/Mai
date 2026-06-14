@@ -20,7 +20,7 @@ def test_render_report_page_full():
     md = render_report_page(_bundle())
     assert md.startswith("---\n")
     assert "schema_version: 2" in md
-    assert "id: ips:r1" in md
+    assert 'id: "ips:r1"' in md
     assert 'title: "Pet threat"' in md          # enriched title wins over raw
     assert "verdict: fixed_confirmed" in md
     assert "confidence: 0.95" in md

@@ -43,7 +43,9 @@ async def iter_bug_reports(session: AsyncSession) -> list[Report]:
 async def drift_observations_by_pair(
         session: AsyncSession) -> dict[tuple[str, str], list[DriftObservation]]:
     grouped: dict[tuple[str, str], list[DriftObservation]] = {}
-    for o in await session.scalars(select(DriftObservation)):
+    for o in await session.scalars(
+            select(DriftObservation).order_by(
+                DriftObservation.fork_a, DriftObservation.fork_b, DriftObservation.subsystem)):
         grouped.setdefault((o.fork_a, o.fork_b), []).append(o)
     return grouped
 

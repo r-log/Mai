@@ -65,7 +65,8 @@ class ReportRepository:
         self._session.add(Event(**kw))
 
     async def all_reports(self) -> list["Report"]:
-        return list(await self._session.scalars(select(Report)))
+        return list(await self._session.scalars(
+            select(Report).order_by(Report.canonical_key)))
 
     async def source_keys_for(self, report_id: str) -> list[str]:
         rows = await self._session.scalars(

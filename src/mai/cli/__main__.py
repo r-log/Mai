@@ -5,7 +5,6 @@ from pathlib import Path
 from mai.config import settings
 from mai.db.base import Base
 from mai.db.session import SessionFactory, engine
-from mai.repository.reports import ReportRepository
 from mai.repository.repos import RepoRepository
 from mai.sources.registry import parse_registry
 
