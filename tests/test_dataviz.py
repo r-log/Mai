@@ -104,6 +104,27 @@ async def test_build_frequency_empty_db_is_empty(session):
     assert f["cores"] == [] and f["subsystems"] == [] and f["intensity"] == {}
 
 
+async def test_build_pushes_groups_merged_prs_by_core(session):
+    from mai.publish.dataviz import build_pushes
+    await ingest_event(session, IntakeEvent(
+        "gh_pr", "mangosthree/server#142", "corpse loot drop fix", "three",
+        status="merged", repo_full_name="mangosthree/server",
+        raw_payload={"merged_at": "2026-06-10T00:00:00Z",
+                     "html_url": "https://github.com/mangosthree/server/pull/142", "number": 142}))
+    await ingest_event(session, IntakeEvent(
+        "gh_pr", "mangosthree/server#9", "open spell pr", "three",
+        status="open", repo_full_name="mangosthree/server",
+        raw_payload={"html_url": "x", "number": 9}))
+    await session.commit()
+    p = await build_pushes(session, limit=8)
+    three = next(c for c in p["cores"] if c["core"] == "three")
+    prs = three["pushes"]
+    assert [x["pr"] for x in prs] == [142]           # only merged
+    assert prs[0]["area"] == "Loot"                  # "corpse"/"loot"/"drop" -> Loot
+    assert prs[0]["url"].endswith("/pull/142")
+    assert prs[0]["repo"] == "mangosthree/server"
+
+
 async def test_write_dataviz_writes_three_files(session, tmp_path):
     from mai.publish.dataviz import write_dataviz
     await DriftRepository(session).upsert(

@@ -6,8 +6,8 @@ from pathlib import Path
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from mai.db.models import DriftObservation, Report, Verification
-from mai.publish.areas import AREAS
+from mai.db.models import DriftObservation, Report, SourceRecord, Verification
+from mai.publish.areas import AREAS, area_of
 from mai.publish.slug import safe_slug
 from mai.publish.views import counts, iter_bug_reports, report_bundle
 from mai.repository.reports import ReportRepository
@@ -122,6 +122,41 @@ async def build_frequency(session: AsyncSession, top_n: int = 6) -> dict:
               "y": round((n - 1) / 2 * spacing - i * spacing, 2)}
              for i, f in enumerate(forks)]
     return {"cores": cores, "subsystems": subsystems, "intensity": intensity, "max": 1.6}
+
+
+async def _latest_payload(session: AsyncSession, source_type: str, source_id: str) -> dict:
+    rec = await session.scalar(
+        select(SourceRecord)
+        .where(SourceRecord.source_type == source_type, SourceRecord.source_id == source_id)
+        .order_by(SourceRecord.version.desc()).limit(1))
+    return rec.payload if rec else {}
+
+
+async def build_pushes(session: AsyncSession, limit: int = 8) -> dict:
+    """Recent merged PRs grouped by core, for the porting board's 'what landed' columns."""
+    rows = await session.scalars(
+        select(Report).where(Report.canonical_key.like("gh_pr:%"),
+                             Report.status == "merged"))
+    by_core: dict[str, list] = {}
+    for r in rows:
+        source_id = r.canonical_key[len("gh_pr:"):]
+        payload = await _latest_payload(session, "gh_pr", source_id)
+        merged_at = payload.get("merged_at") or ""
+        repo = source_id.split("#")[0]
+        by_core.setdefault(r.core, []).append({
+            "title": r.title,
+            "area": area_of(r.title, None, payload),
+            "pr": payload.get("number"),
+            "url": payload.get("html_url", ""),
+            "repo": repo,
+            "merged_at": merged_at,
+        })
+    cores = []
+    for core, pushes in sorted(by_core.items()):
+        pushes.sort(key=lambda p: p["merged_at"], reverse=True)
+        repo = pushes[0]["repo"] if pushes else ""
+        cores.append({"core": core, "repo": repo, "pushes": pushes[:limit]})
+    return {"cores": cores}
 
 
 async def write_dataviz(session: AsyncSession, out_dir: str) -> None:
