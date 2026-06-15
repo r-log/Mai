@@ -1,8 +1,5 @@
 {{ define "main" }}
   {{ $d := .Site.Data.dashboard }}
-  <h1>getMaNGOS Bug &amp; Drift Observatory</h1>
-  <p class="muted">Verified bug status, cross-core divergence, and a porting workspace.</p>
-
   {{ with $d.coverage }}
   <div class="coverage">
     <b>Cores</b>
