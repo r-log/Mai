@@ -1,7 +1,7 @@
 ---
 title: "Mai — Dashboard Workspace Redesign (web v2)"
-status: Draft
-version: 0.1
+status: Built
+version: 1.0
 owners: [r-log]
 related:
   - web-design.md
