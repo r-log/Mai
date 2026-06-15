@@ -11,18 +11,46 @@
   </div>
   {{ end }}
 
-  {{ with $d.stats }}
-  <div class="stats">
-    <div class="tile accent"><div class="n">{{ .reports }}</div><div class="l">Reports</div></div>
-    <div class="tile green"><div class="n">{{ .fixed_confirmed }}</div><div class="l">Confirmed fixed</div>
-      {{ if .fixed_confirmed }}<span class="spark">▲ ready to close</span>{{ end }}</div>
-    <div class="tile amber"><div class="n">{{ .likely_fixed }}</div><div class="l">Likely fixed</div></div>
-    <div class="tile"><div class="n">{{ .open }}</div><div class="l">Open</div></div>
-    <div class="tile purple"><div class="n">{{ .drift_pairs }}</div><div class="l">Drift pairs</div></div>
-  </div>
-  {{ end }}
+  <div class="dash-main">
+    <div class="dash-left">
+      {{ with $d.stats }}
+      <div class="stats">
+        <div class="tile accent"><div class="n">{{ .reports }}</div><div class="l">Reports</div></div>
+        <div class="tile green"><div class="n">{{ .fixed_confirmed }}</div><div class="l">Confirmed fixed</div>
+          {{ if .fixed_confirmed }}<span class="spark">▲ ready to close</span>{{ end }}</div>
+        <div class="tile amber"><div class="n">{{ .likely_fixed }}</div><div class="l">Likely fixed</div></div>
+        <div class="tile"><div class="n">{{ .open }}</div><div class="l">Open</div></div>
+        <div class="tile purple"><div class="n">{{ .drift_pairs }}</div><div class="l">Drift pairs</div></div>
+      </div>
+      {{ end }}
 
-  {{ partial "freq3d.html" . }}
+      {{ partial "freq3d.html" . }}
+    </div>
+
+    <aside class="dash-side">
+      <div class="panel">
+        <div class="panel-h">Open bugs by area</div>
+        <div class="panel-b">
+          {{ range $d.top_areas }}
+            <div class="brow">
+              <span class="pill" style="background:{{ .color }}1f;color:{{ .color }};border-color:{{ .color }}3a">{{ .name }}</span>
+              <span class="bar" style="width:{{ mul .count 10 }}px;background:{{ .color }}"></span>
+              <span class="muted">{{ .count }}</span>
+            </div>
+          {{ end }}
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-h">Recently confirmed fixed</div>
+        <div class="panel-b">
+          {{ range $d.recently_fixed }}
+            <div class="rfix">&#10004; <a href="{{ .url }}">{{ .title }}</a>
+              <span class="muted">— {{ .id }} → {{ .related }}</span></div>
+          {{ else }}<p class="muted">No confirmed fixes yet.</p>{{ end }}
+        </div>
+      </div>
+    </aside>
+  </div>
 
   {{ with .Site.Data.pushes }}
   <div class="board-head">
@@ -40,28 +68,4 @@
   <script>window.MAI_PUSHES = {{ . | jsonify | safeJS }};</script>
   <script src="/js/board.js"></script>
   {{ end }}
-
-  <div class="two">
-    <div class="panel">
-      <div class="panel-h">Open bugs by area</div>
-      <div class="panel-b">
-        {{ range $d.top_areas }}
-          <div class="brow">
-            <span class="pill" style="background:{{ .color }}1f;color:{{ .color }};border-color:{{ .color }}3a">{{ .name }}</span>
-            <span class="bar" style="width:{{ mul .count 10 }}px;background:{{ .color }}"></span>
-            <span class="muted">{{ .count }}</span>
-          </div>
-        {{ end }}
-      </div>
-    </div>
-    <div class="panel">
-      <div class="panel-h">Recently confirmed fixed</div>
-      <div class="panel-b">
-        {{ range $d.recently_fixed }}
-          <div class="rfix">&#10004; <a href="{{ .url }}">{{ .title }}</a>
-            <span class="muted">— {{ .id }} → {{ .related }}</span></div>
-        {{ else }}<p class="muted">No confirmed fixes yet.</p>{{ end }}
-      </div>
-    </div>
-  </div>
 {{ end }}

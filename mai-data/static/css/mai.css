@@ -126,6 +126,12 @@ th{background:var(--canvas)}
 .tile.accent{box-shadow:inset 3px 0 0 #0969da}.tile.green{box-shadow:inset 3px 0 0 #1a7f37}
 .tile.amber{box-shadow:inset 3px 0 0 #9a6700}.tile.purple{box-shadow:inset 3px 0 0 #8250df}
 .two{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px}
+.dash-main{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:16px;align-items:start;margin-bottom:16px}
+.dash-left{display:flex;flex-direction:column;gap:16px;min-width:0}
+.dash-left .stats{margin-bottom:0}
+.dash-left .freq-hero{margin:0}
+.dash-side{display:flex;flex-direction:column;gap:16px;min-width:0}
+@media(max-width:980px){.dash-main{grid-template-columns:1fr}}
 
 /* 3D hero */
 .freq-hero{position:relative;background:#0b0f17;border:1px solid #10161f;border-radius:12px;overflow:hidden;margin:18px 0}
