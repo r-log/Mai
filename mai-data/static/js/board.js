@@ -7,6 +7,8 @@
     World: '#0c7489', Database: '#57606a', Tools: '#424a53', Network: '#4f46c4', Other: '#59636e' };
   function pill(a) { var c = AREA[a] || '#59636e';
     return '<span class="bpill" style="background:' + c + '1f;color:' + c + '">' + a + '</span>'; }
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
   var CORES = ['zero', 'one', 'two', 'three'];
   var byCore = {}; P.cores.forEach(function (c) { byCore[c.core] = c.pushes || []; });
 
@@ -20,8 +22,8 @@
       var d = document.createElement('div'); d.className = 'bcard'; d.draggable = true;
       d.setAttribute('data-pr', it.pr); d.setAttribute('data-core', core);
       d.setAttribute('data-title', it.title); d.setAttribute('data-area', it.area);
-      d.innerHTML = '<div class="ct">' + it.title + '</div><div class="cm">' + pill(it.area)
-        + '<span class="bpr">' + core + ' · PR #' + it.pr + '</span></div>';
+      d.innerHTML = '<div class="ct">' + esc(it.title) + '</div><div class="cm">' + pill(it.area)
+        + '<span class="bpr">' + core + ' · PR #' + esc(it.pr) + '</span></div>';
       d.addEventListener('dragstart', function () { dragging = d; d.classList.add('dragging'); });
       d.addEventListener('dragend', function () { dragging = null; d.classList.remove('dragging'); });
       drop.appendChild(d);
@@ -52,8 +54,8 @@
       todo.innerHTML = items.map(function (it) {
         return '<div class="bcard tcard' + (it.done ? ' done' : '') + '">'
           + '<span class="x" title="remove">×</span>'
-          + '<div class="ct">' + it.title + '</div>'
-          + '<div class="cm">' + pill(it.area) + '<span class="bpr">from ' + it.core + ' · PR #' + it.pr + '</span></div>'
+          + '<div class="ct">' + esc(it.title) + '</div>'
+          + '<div class="cm">' + pill(it.area) + '<span class="bpr">from ' + esc(it.core) + ' · PR #' + esc(it.pr) + '</span></div>'
           + '<div class="src"><span class="arrow">→ port to</span>'
           + '<select class="target">' + targetOpts(it.core) + '</select>'
           + '<label class="donebox"><input type="checkbox"' + (it.done ? ' checked' : '') + '> done</label></div></div>';
