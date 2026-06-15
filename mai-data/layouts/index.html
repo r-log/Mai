@@ -27,6 +27,23 @@
 
   {{ partial "freq3d.html" . }}
 
+  {{ with .Site.Data.pushes }}
+  <div class="board-head">
+    <h2>Porting board — what landed where</h2>
+    <span class="hint">Drag a fix into <b>Porting TODO</b> to track what needs carrying core→core. Saved in your browser.</span>
+  </div>
+  <div class="board" id="board">
+    <div class="col" data-core="zero"><div class="colh"><span class="cname">Zero</span><span class="ct"></span></div><div class="cards"></div></div>
+    <div class="col" data-core="one"><div class="colh"><span class="cname">One</span><span class="ct"></span></div><div class="cards"></div></div>
+    <div class="col" data-core="two"><div class="colh"><span class="cname">Two</span><span class="ct"></span></div><div class="cards"></div></div>
+    <div class="col" data-core="three"><div class="colh"><span class="cname">Three</span><span class="ct"></span></div><div class="cards"></div></div>
+    <div class="col todo"><div class="colh"><span class="cname">⤷ Porting TODO</span><span class="ct" id="todoct">0</span></div><div class="cards" id="todo"></div></div>
+  </div>
+  <div class="board-foot">Cards = recently merged fixes per core. The TODO list is personal and persists locally.</div>
+  <script>window.MAI_PUSHES = {{ . | jsonify | safeJS }};</script>
+  <script src="/js/board.js"></script>
+  {{ end }}
+
   <div class="two">
     <div class="panel">
       <div class="panel-h">Open bugs by area</div>
