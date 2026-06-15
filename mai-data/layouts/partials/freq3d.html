@@ -1,0 +1,28 @@
+<div id="freq" class="freq-hero">
+  <div class="hh"><div><h3>Cross-core drift</h3>
+    <span class="sub">each layer = a core · ridges rise where it diverges most per subsystem</span></div>
+    <a href="/sync/">Full drift page →</a></div>
+  <canvas id="freq-c"></canvas>
+  <div id="freq-layers" class="freq-layers"><div class="lt">Cores — click to toggle</div>
+    <button class="allbtn" id="freq-showall">Show all</button></div>
+  <div id="freq-err" class="freq-err"></div>
+  <div class="freq-ctrls">
+    <label>Height
+      <select id="freq-mode">
+        <option value="contrast" selected>Contrast</option>
+        <option value="relative">Relative</option>
+        <option value="absolute">Absolute</option>
+      </select></label>
+    <label>Peak <input id="freq-amp" type="range" min="0.6" max="3.0" step="0.1" value="1.8"></label>
+    <label>Spacing <input id="freq-gap" type="range" min="0.6" max="2.8" step="0.1" value="1.4"></label>
+    <label><input id="freq-guides" type="checkbox" checked> guides</label>
+    <label><input id="freq-spin" type="checkbox" checked> spin</label>
+    <button class="fbtn" id="freq-reset">Reset</button>
+    <button class="fbtn" id="freq-top">Top-down</button>
+  </div>
+  <div class="freq-legend">low <span class="hm-grad"></span> high divergence · drag rotate · scroll zoom · right-drag pan</div>
+</div>
+<script>window.MAI_FREQ = {{ with .Site.Data.frequency }}{{ . | jsonify | safeJS }}{{ else }}null{{ end }};</script>
+<script src="/js/vendor/three.min.js"></script>
+<script src="/js/vendor/OrbitControls.js"></script>
+<script src="/js/frequency3d.js"></script>

@@ -26,21 +26,7 @@
   </div>
   {{ end }}
 
-  {{/* HERO PLACEHOLDER — replaced by the 3D partial in Phase 2 */}}
-  <div class="panel">
-    <div class="panel-h">Cross-core drift — % of shared files diverged</div>
-    <div class="panel-b">
-      {{ with $drift }}
-      <table class="hm">
-        <tr><th></th>{{ range .cores }}<th>{{ . }}</th>{{ end }}</tr>
-        {{ range .rows }}<tr><td class="hm-l">{{ .core }}</td>
-          {{ range .cells }}{{ if .self }}<td class="hm-c na">—</td>
-            {{ else if ne .value nil }}<td class="hm-c" style="background:{{ .color }}">{{ .value }}</td>
-            {{ else }}<td class="hm-c na"></td>{{ end }}{{ end }}</tr>{{ end }}
-      </table>
-      {{ else }}<p class="muted">No drift data yet — run <code>mai drift</code>.</p>{{ end }}
-    </div>
-  </div>
+  {{ partial "freq3d.html" . }}
 
   <div class="two">
     <div class="panel">
