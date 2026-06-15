@@ -79,16 +79,23 @@ async def test_build_frequency_heightfield(session):
     assert f["intensity"][zero_full]["src/game/Object"] == 0.75    # raw 60/80, no scaling
 
 
-async def test_build_frequency_raw_ratio_range(session):
+async def test_build_frequency_raw_ratio_range_and_gaps(session):
     from mai.publish.dataviz import build_frequency
     d = DriftRepository(session)
+    # Object is shared only by the zero/two pair; shared-db only by the zero/one pair.
     await d.upsert("mangoszero/server", "mangostwo/server", "src/game/Object",
                    {"shared": 80, "diverged": 60, "identical": 20, "only_a": 0, "only_b": 0})
+    await d.upsert("mangoszero/server", "mangosone/server", "src/shared/Database",
+                   {"shared": 40, "diverged": 10, "identical": 30, "only_a": 0, "only_b": 0})
     await session.commit()
     f = await build_frequency(session)
+    saw_none = False
     for fork, subs in f["intensity"].items():
         for sub, v in subs.items():
             assert v is None or 0.0 <= v <= 1.0
+            if v is None:
+                saw_none = True
+    assert saw_none   # a fork that doesn't share a subsystem yields a null gap
 
 
 async def test_build_frequency_empty_db_is_empty(session):
