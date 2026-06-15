@@ -139,7 +139,8 @@
   build(); buildGuides(); refresh();
   (function loop() { controls.update(); renderer.render(scene, camera); requestAnimationFrame(loop); })();
   window.addEventListener('resize', function () {
-    W = wrap.clientWidth || 1000; if (W <= 0) return;
+    W = wrap.clientWidth || 1000; H = canvas.clientHeight || 420;
+    if (W <= 0 || H <= 0) return;
     renderer.setSize(W, H, false); camera.aspect = W / H; camera.updateProjectionMatrix();
   });
 

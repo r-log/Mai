@@ -1,7 +1,7 @@
 <div id="freq" class="freq-hero">
   <div class="hh"><div><h3>Cross-core drift</h3>
     <span class="sub">each layer = a core · ridges rise where it diverges most per subsystem</span></div>
-    <a href="/sync/">Full drift page →</a></div>
+    {{ if ne .RelPermalink "/sync/" }}<a href="/sync/">Full drift page →</a>{{ end }}</div>
   <canvas id="freq-c"></canvas>
   <div id="freq-layers" class="freq-layers"><div class="lt">Cores — click to toggle</div>
     <button class="allbtn" id="freq-showall">Show all</button></div>
