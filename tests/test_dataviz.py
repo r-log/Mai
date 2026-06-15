@@ -94,3 +94,17 @@ async def test_write_dataviz_writes_three_files(session, tmp_path):
     await write_dataviz(session, str(tmp_path))
     for name in ("drift.json", "dashboard.json", "frequency.json"):
         assert (tmp_path / "data" / name).exists()
+
+
+async def test_build_dashboard_coverage(session):
+    from mai.publish.dataviz import build_dashboard
+    await ingest_event(session, IntakeEvent("ips", "r1", "Pet bug", "three",
+                                            raw_payload={"markdown": "x"}))
+    await ingest_event(session, IntakeEvent("ips", "r2", "Spell bug", "zero",
+                                            raw_payload={"markdown": "y"}))
+    await session.commit()
+    dash = await build_dashboard(session)
+    cov = dash["coverage"]
+    assert cov["enriched"] == 0 and cov["total"] == 2
+    assert {c["core"]: c["reports"] for c in cov["cores"]} == {"three": 1, "zero": 1}
+    assert isinstance(cov["generated_at"], str) and "T" in cov["generated_at"]

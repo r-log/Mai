@@ -1,11 +1,12 @@
 import json
 import math
+from datetime import datetime, timezone
 from pathlib import Path
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from mai.db.models import DriftObservation, Verification
+from mai.db.models import DriftObservation, Report, Verification
 from mai.publish.areas import AREAS
 from mai.publish.slug import safe_slug
 from mai.publish.views import counts, iter_bug_reports, report_bundle
@@ -73,7 +74,19 @@ async def build_dashboard(session: AsyncSession) -> dict:
                    if v.evidence and isinstance(v.evidence[0], dict) else "")
         fixed.append({"id": rep.canonical_key, "title": rep.title, "core": rep.core,
                       "related": related, "url": f"/{rep.core}/bugs/{safe_slug(rep.canonical_key)}/"})
-    return {"stats": stats, "top_areas": top_areas, "recently_fixed": fixed}
+    per_core_rows = await session.execute(
+        select(Report.core, func.count()).group_by(Report.core))
+    per_core = sorted(
+        ({"core": core, "reports": n} for core, n in per_core_rows),
+        key=lambda c: c["reports"], reverse=True)
+    coverage = {
+        "total": stats["reports"],
+        "enriched": stats["enriched"],
+        "cores": per_core,
+        "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+    }
+    return {"stats": stats, "top_areas": top_areas,
+            "recently_fixed": fixed, "coverage": coverage}
 
 
 async def build_frequency(session: AsyncSession, top_n: int = 6) -> dict:
