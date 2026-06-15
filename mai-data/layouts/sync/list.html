@@ -2,6 +2,19 @@
   <h1>Cross-core drift</h1>
   <p class="muted">Each layer is a core; the surface rises where that core diverges most per subsystem.</p>
   {{ partial "freq3d.html" . }}
+  {{ with .Site.Data.drift }}
+  <h2 style="margin-top:22px">Quick scan — % of shared files diverged</h2>
+  <div class="panel"><div class="panel-b">
+    <table class="hm">
+      <tr><th></th>{{ range .cores }}<th>{{ . }}</th>{{ end }}</tr>
+      {{ range .rows }}<tr><td class="hm-l">{{ .core }}</td>
+        {{ range .cells }}{{ if .self }}<td class="hm-c na">—</td>
+          {{ else if ne .value nil }}<td class="hm-c" style="background:{{ .color }}">{{ .value }}</td>
+          {{ else }}<td class="hm-c na"></td>{{ end }}{{ end }}</tr>{{ end }}
+    </table>
+    <div class="hm-legend">low <span class="hm-grad"></span> high divergence</div>
+  </div></div>
+  {{ end }}
   <h2 style="margin-top:22px">Per-pair drift</h2>
   <ul class="core-list">
     {{ range .Pages }}<li><a href="{{ .RelPermalink }}">{{ .Title }}</a></li>{{ end }}
