@@ -9,7 +9,11 @@
 <body>
   <header class="topbar">
     <a class="brand" href="/">🐛 Mai</a>
-    <nav><a href="/">Dashboard</a><a href="/sync/">Drift</a></nav>
+    <nav>
+      <a href="/">Overview</a>
+      <a href="/sync/">Drift</a>
+    </nav>
+    <div class="search">Search bugs, areas, cores…</div>
   </header>
   <main class="container">{{ block "main" . }}{{ end }}</main>
 </body>
