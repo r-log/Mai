@@ -11,3 +11,5 @@ mai-data/resources/
 .hugo_build.lock
 .superpowers/
 .env
+mai-data/tmp/
+.python-version
