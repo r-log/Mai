@@ -8,7 +8,7 @@
     <div class="freq-legend">low <span class="hm-grad"></span> high divergence · drag to rotate</div>
   </div>
 
-  <script>window.MAI_FREQ = {{ with .Site.Data.frequency }}{{ . | jsonify }}{{ else }}null{{ end }};</script>
+  <script>window.MAI_FREQ = {{ with .Site.Data.frequency }}{{ . | jsonify | safeJS }}{{ else }}null{{ end }};</script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script src="/js/frequency3d.js"></script>
 
