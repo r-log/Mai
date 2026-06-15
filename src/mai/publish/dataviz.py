@@ -114,8 +114,7 @@ async def build_frequency(session: AsyncSession, top_n: int = 6) -> dict:
             vals = [o.diverged / o.shared for o in obs
                     if o.subsystem == sub["full"] and o.shared
                     and fork in (o.fork_a, o.fork_b)]
-            if vals:
-                per_sub[sub["full"]] = round(sum(vals) / len(vals) * 1.5, 3)
+            per_sub[sub["full"]] = round(sum(vals) / len(vals), 3) if vals else None
         intensity[fork] = per_sub
 
     spacing, n = 2.4, len(forks)

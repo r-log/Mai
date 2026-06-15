@@ -76,7 +76,19 @@ async def test_build_frequency_heightfield(session):
     assert "Object" in names and "shared" in names      # last path segment
     assert all("x" in s and "z" in s for s in f["subsystems"])
     zero_full = next(c["full"] for c in f["cores"] if c["name"] == "Zero")
-    assert f["intensity"][zero_full]["src/game/Object"] == 1.125   # 60/80 * 1.5
+    assert f["intensity"][zero_full]["src/game/Object"] == 0.75    # raw 60/80, no scaling
+
+
+async def test_build_frequency_raw_ratio_range(session):
+    from mai.publish.dataviz import build_frequency
+    d = DriftRepository(session)
+    await d.upsert("mangoszero/server", "mangostwo/server", "src/game/Object",
+                   {"shared": 80, "diverged": 60, "identical": 20, "only_a": 0, "only_b": 0})
+    await session.commit()
+    f = await build_frequency(session)
+    for fork, subs in f["intensity"].items():
+        for sub, v in subs.items():
+            assert v is None or 0.0 <= v <= 1.0
 
 
 async def test_build_frequency_empty_db_is_empty(session):
