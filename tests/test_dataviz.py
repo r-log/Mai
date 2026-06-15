@@ -125,14 +125,14 @@ async def test_build_pushes_groups_merged_prs_by_core(session):
     assert prs[0]["repo"] == "mangosthree/server"
 
 
-async def test_write_dataviz_writes_three_files(session, tmp_path):
+async def test_write_dataviz_writes_four_files(session, tmp_path):
     from mai.publish.dataviz import write_dataviz
     await DriftRepository(session).upsert(
         "mangoszero/server", "mangostwo/server", "src/game/Object",
         {"shared": 10, "diverged": 5, "identical": 5, "only_a": 0, "only_b": 0})
     await session.commit()
     await write_dataviz(session, str(tmp_path))
-    for name in ("drift.json", "dashboard.json", "frequency.json"):
+    for name in ("drift.json", "dashboard.json", "frequency.json", "pushes.json"):
         assert (tmp_path / "data" / name).exists()
 
 

@@ -168,3 +168,5 @@ async def write_dataviz(session: AsyncSession, out_dir: str) -> None:
         json.dumps(await build_dashboard(session), indent=2), encoding="utf-8")
     (data / "frequency.json").write_text(
         json.dumps(await build_frequency(session), indent=2), encoding="utf-8")
+    (data / "pushes.json").write_text(
+        json.dumps(await build_pushes(session), indent=2), encoding="utf-8")
