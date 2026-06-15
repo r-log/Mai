@@ -75,7 +75,7 @@ async def build_dashboard(session: AsyncSession) -> dict:
         fixed.append({"id": rep.canonical_key, "title": rep.title, "core": rep.core,
                       "related": related, "url": f"/{rep.core}/bugs/{safe_slug(rep.canonical_key)}/"})
     per_core_rows = await session.execute(
-        select(Report.core, func.count()).group_by(Report.core))
+        select(Report.core, func.count(Report.id)).group_by(Report.core))
     per_core = sorted(
         ({"core": core, "reports": n} for core, n in per_core_rows),
         key=lambda c: c["reports"], reverse=True)

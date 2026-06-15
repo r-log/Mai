@@ -102,9 +102,13 @@ async def test_build_dashboard_coverage(session):
                                             raw_payload={"markdown": "x"}))
     await ingest_event(session, IntakeEvent("ips", "r2", "Spell bug", "zero",
                                             raw_payload={"markdown": "y"}))
+    await ingest_event(session, IntakeEvent("ips", "r3", "Another bug", "three",
+                                            raw_payload={"markdown": "z"}))
     await session.commit()
     dash = await build_dashboard(session)
     cov = dash["coverage"]
-    assert cov["enriched"] == 0 and cov["total"] == 2
-    assert {c["core"]: c["reports"] for c in cov["cores"]} == {"three": 1, "zero": 1}
+    assert cov["enriched"] == 0 and cov["total"] == 3
+    assert {c["core"]: c["reports"] for c in cov["cores"]} == {"three": 2, "zero": 1}
+    assert cov["cores"][0]["core"] == "three"   # sorted descending by count
     assert isinstance(cov["generated_at"], str) and "T" in cov["generated_at"]
+    assert cov["generated_at"].endswith("+00:00") or cov["generated_at"].endswith("Z")
