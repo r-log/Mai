@@ -10,6 +10,12 @@
 
   // ---- data → raw ratio lookup ----
   var CORES = F.cores;                       // [{name, full, y}]
+  // Stack by expansion order: Zero (bottom) → One → Two → Three (top).
+  var CORE_ORD = { zero: 0, one: 1, two: 2, three: 3 };
+  function coreOrd(c) {
+    var n = (c.name || '').toLowerCase(); return CORE_ORD[n] !== undefined ? CORE_ORD[n] : 99;
+  }
+  CORES.sort(function (a, b) { return coreOrd(a) - coreOrd(b); });
   var SUBS = F.subsystems;                   // [{name, full, x, z}]
   function raw(coreFull, subFull) {
     var m = F.intensity[coreFull] || {};
@@ -95,7 +101,7 @@
       g.setAttribute('color', new THREE.Float32BufferAttribute(cols, 3));
       var mesh = new THREE.Mesh(g, new THREE.MeshBasicMaterial(
         { wireframe: true, vertexColors: true, transparent: true, opacity: 0.95 }));
-      mesh.position.y = (1.5 - li) * GAP; mesh.visible = c._off !== true;
+      mesh.position.y = (li - (CORES.length - 1) / 2) * GAP; mesh.visible = c._off !== true;
       group.add(mesh); meshes.push(mesh);
     });
   }
@@ -114,18 +120,22 @@
   // ---- layer overlay ----
   var layersEl = document.getElementById('freq-layers');
   var allbtn = document.getElementById('freq-showall');
-  CORES.forEach(function (c, i) {
-    var row = document.createElement('div'); row.className = 'lrow'; row.setAttribute('data-i', i);
-    var hex = ['#2ea043', '#4f9bd9', '#d29922', '#f85149'][i % 4];
-    row.innerHTML = '<span class="dot" style="background:' + hex + '"></span>'
-      + '<span class="ln">' + c.name + '</span>'
-      + '<span class="solo" data-solo>solo</span><span class="eye">●</span>';
-    row.addEventListener('click', function (e) {
-      if (e.target.hasAttribute('data-solo')) { solo(i); return; }
-      c._off = c._off !== true ? true : false; refresh();
-    });
-    layersEl.insertBefore(row, allbtn);
-  });
+  // List rows top→bottom to match the stack (Three at top … Zero at bottom).
+  for (var di = CORES.length - 1; di >= 0; di--) {
+    (function (i) {
+      var c = CORES[i];
+      var row = document.createElement('div'); row.className = 'lrow'; row.setAttribute('data-i', i);
+      var hex = ['#2ea043', '#4f9bd9', '#d29922', '#f85149'][i % 4];
+      row.innerHTML = '<span class="dot" style="background:' + hex + '"></span>'
+        + '<span class="ln">' + c.name + '</span>'
+        + '<span class="solo" data-solo>solo</span><span class="eye">●</span>';
+      row.addEventListener('click', function (e) {
+        if (e.target.hasAttribute('data-solo')) { solo(i); return; }
+        c._off = c._off !== true ? true : false; refresh();
+      });
+      layersEl.insertBefore(row, allbtn);
+    })(di);
+  }
   function solo(i) { CORES.forEach(function (c, j) { c._off = (j !== i); }); refresh(); }
   allbtn.addEventListener('click', function () { CORES.forEach(function (c) { c._off = false; }); refresh(); });
   function refresh() {
