@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     openrouter_api_key: str | None = None
     openrouter_api_url: str = "https://openrouter.ai/api"
     enrichment_model: str = "moonshotai/kimi-k2.5"
+    enrichment_concurrency: int = 8
     embedding_api_key: str | None = None
     embedding_api_url: str = "https://openrouter.ai/api"
     embedding_model: str = "openai/text-embedding-3-small"

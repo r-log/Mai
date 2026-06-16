@@ -57,7 +57,7 @@ async def _enrich() -> int:
     import httpx
 
     from mai.enrich.enricher import OpenRouterEnricher
-    from mai.enrich_run import enrich_pending
+    from mai.enrich_run import enrich_pending_concurrent
 
     async with httpx.AsyncClient(timeout=120.0) as http:
         enricher = OpenRouterEnricher(
@@ -67,7 +67,8 @@ async def _enrich() -> int:
             client=http,
         )
         async with SessionFactory() as session:
-            return await enrich_pending(session, enricher)
+            return await enrich_pending_concurrent(
+                session, enricher, concurrency=settings.enrichment_concurrency)
 
 
 async def _embed() -> int:

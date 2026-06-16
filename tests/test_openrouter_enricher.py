@@ -36,6 +36,30 @@ async def test_openrouter_enricher_raises_on_bad_json():
             await enricher.enrich(CTX)
 
 
+def _non_json_body(request: httpx.Request) -> httpx.Response:
+    # OpenRouter sometimes returns a 200 whose body is not JSON at all
+    # (gateway/error pages, truncated streams). resp.json() then explodes.
+    return httpx.Response(200, text="upstream gateway error\n\nplease retry\n")
+
+
+async def test_openrouter_enricher_raises_on_non_json_body():
+    async with httpx.AsyncClient(transport=httpx.MockTransport(_non_json_body)) as http:
+        enricher = OpenRouterEnricher("or-key", "some/model", client=http)
+        with pytest.raises(EnrichmentSchemaError):
+            await enricher.enrich(CTX)
+
+
+def _missing_choices(request: httpx.Request) -> httpx.Response:
+    return httpx.Response(200, json={"error": {"message": "rate limited"}})
+
+
+async def test_openrouter_enricher_raises_on_missing_choices():
+    async with httpx.AsyncClient(transport=httpx.MockTransport(_missing_choices)) as http:
+        enricher = OpenRouterEnricher("or-key", "some/model", client=http)
+        with pytest.raises(EnrichmentSchemaError):
+            await enricher.enrich(CTX)
+
+
 def _http_error(request: httpx.Request) -> httpx.Response:
     return httpx.Response(401, json={"error": "unauthorized"})
 

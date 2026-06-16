@@ -47,7 +47,13 @@ class OpenRouterEnricher:
             headers=self._headers,
         )
         resp.raise_for_status()
-        content = resp.json()["choices"][0]["message"].get("content")
+        try:
+            content = resp.json()["choices"][0]["message"].get("content")
+        except (ValueError, KeyError, IndexError, TypeError) as exc:
+            # 200 with a non-JSON or unexpectedly-shaped body (gateway page,
+            # truncated stream, {"error": ...}). Treat as a bad model response
+            # so callers skip this report instead of aborting the whole run.
+            raise EnrichmentSchemaError(f"malformed OpenRouter response: {exc}") from exc
         if not content:
             raise EnrichmentSchemaError("OpenRouter returned empty/null message content")
         return parse_enrichment(content)
