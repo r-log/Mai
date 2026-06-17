@@ -1,0 +1,15 @@
+{{ define "main" }}
+  <header class="port-head">
+    <h1>Port Debt</h1>
+    <div id="port-summary" class="port-summary muted"></div>
+  </header>
+  <div class="port-filters" id="port-filters" hidden>
+    <select id="f-tier"><option value="">all tiers</option><option>surgical</option><option>small</option><option>moderate</option><option>bulk</option></select>
+    <select id="f-source"><option value="">any source</option></select>
+    <input id="f-search" type="search" placeholder="search title / subsystem">
+    <label class="showdis"><input type="checkbox" id="f-dismissed"> show dismissed</label>
+  </div>
+  <div class="port-board" id="port-board"><div class="empty-state">No port-debt data yet.</div></div>
+  <script>window.MAI_PORT = {{ .Site.Data.port_candidates | jsonify | safeJS }};</script>
+  <script src="/js/portboard.js"></script>
+{{ end }}
