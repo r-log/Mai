@@ -36,6 +36,8 @@ async def compute_port_candidates(session: AsyncSession) -> dict:
         if not gd["present"] or not gd["absent"]:
             continue
         source_core, source_sha = min(gd["present"], key=lambda t: t[0])
+        if source_sha is None:
+            continue
         commit = await session.scalar(
             select(Commit).where(Commit.core == source_core, Commit.sha == source_sha)
         )
@@ -76,6 +78,7 @@ async def compute_port_candidates(session: AsyncSession) -> dict:
             await cand_repo.mark_status(cand, "ported")
             auto_resolved += 1
 
+    candidates = len(await cand_repo.open_candidates())
     await session.commit()
-    return {"candidates": len(current), "skipped_unportable": skipped,
+    return {"candidates": candidates, "skipped_unportable": skipped,
             "auto_resolved": auto_resolved}

@@ -79,7 +79,7 @@ async def test_recompute_idempotent_and_auto_resolves_when_ported(session):
     result = await _analyze(session)
     resolved = await PortCandidateRepository(session).get(p1.id, "two")
     assert resolved.status == "ported"
-    assert result["auto_resolved"] >= 1
+    assert result["auto_resolved"] == 1
     # idempotent: no duplicate rows
     assert await session.scalar(
         select(func.count()).select_from(PortCandidate).where(
