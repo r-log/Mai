@@ -6,7 +6,8 @@ from pathlib import Path
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from mai.db.models import DriftObservation, Report, SourceRecord, Verification
+from mai.db.models import (Commit, DriftObservation, PatchGroup, PortCandidate,
+                           Report, Repo, SourceRecord, Verification)
 from mai.publish.areas import AREAS, area_of
 from mai.publish.slug import safe_slug
 from mai.publish.views import counts, iter_bug_reports, report_bundle
@@ -159,6 +160,64 @@ async def build_pushes(session: AsyncSession, limit: int = 8) -> dict:
     return {"cores": cores}
 
 
+_TIER_RANK = {"surgical": 0, "small": 1, "moderate": 2, "bulk": 3}
+_CORE_ORDER = {"zero": 0, "one": 1, "two": 2, "three": 3}
+
+
+async def _source_repos(session: AsyncSession) -> dict[str, str]:
+    """core -> repo full_name for building commit URLs (prefer the .../server repo)."""
+    repos: dict[str, str] = {}
+    for r in await session.scalars(select(Repo)):
+        if r.core not in repos or r.full_name.endswith("/server"):
+            repos[r.core] = r.full_name
+    return repos
+
+
+async def build_port_candidates(session: AsyncSession) -> dict:
+    """Open port candidates grouped by target fork, quick-wins first, for /port/."""
+    repos = await _source_repos(session)
+    pg_patch = {pg.id: pg.patch_id for pg in await session.scalars(select(PatchGroup))}
+    cands = list(await session.scalars(
+        select(PortCandidate).where(PortCandidate.status == "open")))
+
+    tiers = {"surgical": 0, "small": 0, "moderate": 0, "bulk": 0}
+    by_target: dict[str, list] = {}
+    for pc in cands:
+        commit = await session.scalar(
+            select(Commit).where(Commit.core == pc.source_core,
+                                 Commit.sha == pc.source_sha))
+        title = commit.message.strip().splitlines()[0] if commit and commit.message else ""
+        if not title:
+            title = f"{pc.subsystem} fix ({(pc.source_sha or '')[:8]})"
+        repo = repos.get(pc.source_core)
+        source_url = (f"https://github.com/{repo}/commit/{pc.source_sha}"
+                      if repo and pc.source_sha else None)
+        by_target.setdefault(pc.target_core, []).append({
+            "id": f"{pc.patch_group_id}:{pc.target_core}",
+            "title": title,
+            "source_core": pc.source_core,
+            "source_url": source_url,
+            "subsystem": pc.subsystem,
+            "tier": pc.tier,
+            "magnitude": pc.magnitude,
+            "confidence": pc.confidence,
+            "patch_id": (pg_patch.get(pc.patch_group_id) or "")[:12],
+            "evidence": pc.evidence,
+        })
+        if pc.tier in tiers:
+            tiers[pc.tier] += 1
+
+    all_targets = sorted(set(by_target) | set(_CORE_ORDER),
+                         key=lambda c: (_CORE_ORDER.get(c, 99), c))
+    columns = []
+    for core in all_targets:
+        items = by_target.get(core, [])
+        items.sort(key=lambda x: (_TIER_RANK.get(x["tier"], 9), x["magnitude"]))
+        columns.append({"core": core, "repo": repos.get(core, ""),
+                        "count": len(items), "candidates": items})
+    return {"summary": {"total": len(cands), "tiers": tiers}, "columns": columns}
+
+
 async def write_dataviz(session: AsyncSession, out_dir: str) -> None:
     data = Path(out_dir) / "data"
     data.mkdir(parents=True, exist_ok=True)
@@ -170,3 +229,5 @@ async def write_dataviz(session: AsyncSession, out_dir: str) -> None:
         json.dumps(await build_frequency(session), indent=2), encoding="utf-8")
     (data / "pushes.json").write_text(
         json.dumps(await build_pushes(session), indent=2), encoding="utf-8")
+    (data / "port_candidates.json").write_text(
+        json.dumps(await build_port_candidates(session), indent=2), encoding="utf-8")
