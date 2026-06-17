@@ -1,7 +1,7 @@
 from sqlalchemy import func, select
 
 from mai.db.models import PatchGroup, PortCandidate
-from mai.repository.port_candidate import PortCandidateRepository
+from mai.repository.port_candidate import PortCandidateRepository, magnitude_tier
 
 
 async def _pg(session, patch_id="P1") -> str:
@@ -50,3 +50,32 @@ async def test_open_candidates_filters_by_status(session):
     await session.commit()
     opens = await repo.open_candidates()
     assert [c.target_core for c in opens] == ["two"]
+
+
+def test_magnitude_tier_bands():
+    assert magnitude_tier(0) == "surgical"
+    assert magnitude_tier(50) == "surgical"
+    assert magnitude_tier(51) == "small"
+    assert magnitude_tier(500) == "small"
+    assert magnitude_tier(501) == "moderate"
+    assert magnitude_tier(5000) == "moderate"
+    assert magnitude_tier(5001) == "bulk"
+    assert magnitude_tier(824466) == "bulk"
+
+
+async def test_upsert_stamps_tier_from_magnitude(session):
+    pg = PatchGroup(patch_id="PT")
+    session.add(pg)
+    await session.flush()
+    repo = PortCandidateRepository(session)
+    await repo.upsert(pg.id, "two", source_core="three", subsystem="src/shared/Log",
+                      classification="shared", magnitude=12, confidence="high",
+                      evidence=[], source_sha="a")
+    await session.commit()
+    assert (await repo.get(pg.id, "two")).tier == "surgical"
+    # recompute with a bulk magnitude -> tier updates
+    await repo.upsert(pg.id, "two", source_core="three", subsystem="src/shared/Log",
+                      classification="shared", magnitude=9000, confidence="high",
+                      evidence=[], source_sha="a")
+    await session.commit()
+    assert (await repo.get(pg.id, "two")).tier == "bulk"

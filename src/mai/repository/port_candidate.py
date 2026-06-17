@@ -4,6 +4,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from mai.db.models import PortCandidate
 
 
+def magnitude_tier(magnitude: int) -> str:
+    """Band a candidate's line-magnitude. surgical<=50<small<=500<moderate<=5000<bulk."""
+    if magnitude <= 50:
+        return "surgical"
+    if magnitude <= 500:
+        return "small"
+    if magnitude <= 5000:
+        return "moderate"
+    return "bulk"
+
+
 class PortCandidateRepository:
     def __init__(self, session: AsyncSession):
         self._session = session
@@ -26,6 +37,7 @@ class PortCandidateRepository:
             existing.subsystem = subsystem
             existing.classification = classification
             existing.magnitude = magnitude
+            existing.tier = magnitude_tier(magnitude)
             existing.confidence = confidence
             existing.evidence = evidence
             existing.source_sha = source_sha
@@ -34,6 +46,7 @@ class PortCandidateRepository:
                 patch_group_id=patch_group_id, source_core=source_core,
                 target_core=target_core, subsystem=subsystem,
                 classification=classification, magnitude=magnitude,
+                tier=magnitude_tier(magnitude),
                 confidence=confidence, evidence=evidence, source_sha=source_sha))
 
     async def open_candidates(self) -> list[PortCandidate]:

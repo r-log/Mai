@@ -272,6 +272,7 @@ class PortCandidate(Base):
     subsystem: Mapped[str] = mapped_column(String(255))
     classification: Mapped[str] = mapped_column(String(16))   # the qualifying class (shared)
     magnitude: Mapped[int] = mapped_column(Integer, default=0)  # added+removed lines of the source fix
+    tier: Mapped[str] = mapped_column(String(16), default="surgical")  # surgical|small|moderate|bulk
     confidence: Mapped[str] = mapped_column(String(16), default="high")
     evidence: Mapped[list] = mapped_column(JSON, default=list)
     status: Mapped[str] = mapped_column(String(16), default="open")  # open | ported | dismissed
