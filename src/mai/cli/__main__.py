@@ -129,6 +129,13 @@ async def _commits_harvest() -> int:
     return total
 
 
+async def _sync_analyze() -> dict:
+    from mai.sync.propagate import compute_propagation
+
+    async with SessionFactory() as session:
+        return await compute_propagation(session)
+
+
 async def _ips_crawl() -> int:
     if not settings.firecrawl_api_key:
         raise SystemExit("FIRECRAWL_API_KEY not set")
@@ -162,6 +169,7 @@ def main() -> None:
     sub.add_parser("correlate")
     sub.add_parser("drift")
     sub.add_parser("commits-harvest")
+    sub.add_parser("sync-analyze")
     args = parser.parse_args()
 
     if args.cmd == "init-db":
@@ -195,6 +203,10 @@ def main() -> None:
     elif args.cmd == "commits-harvest":
         count = asyncio.run(_commits_harvest())
         print(f"commits-harvest: {count} new commits")
+    elif args.cmd == "sync-analyze":
+        result = asyncio.run(_sync_analyze())
+        print(f"sync-analyze: groups={result['groups']} present={result['present']} "
+              f"absent={result['absent']} cherry_links={result['cherry_links']}")
 
 
 if __name__ == "__main__":
