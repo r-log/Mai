@@ -69,6 +69,7 @@
       Array.prototype.forEach.call(card.querySelectorAll('.pc-actions button'), function (b) {
         b.classList.toggle('on', b.getAttribute('data-act') === state[id]);
       });
+      applyFilters();
       return;
     }
     var ev = card.querySelector('.pc-evidence');
@@ -89,11 +90,13 @@
   function applyFilters() {
     var tier = fTier ? fTier.value : '', src = fSrc ? fSrc.value : '';
     var q = fSearch ? fSearch.value.trim().toLowerCase() : '';
-    board.classList.toggle('show-dismissed', !!(fDis && fDis.checked));
+    var showDis = !!(fDis && fDis.checked);
+    board.classList.toggle('show-dismissed', showDis);
     Array.prototype.forEach.call(board.querySelectorAll('.pcard'), function (card) {
       var ok = (!tier || card.getAttribute('data-tier') === tier)
         && (!src || card.getAttribute('data-source') === src)
-        && (!q || card.getAttribute('data-text').indexOf(q) !== -1);
+        && (!q || card.getAttribute('data-text').indexOf(q) !== -1)
+        && (showDis || !card.classList.contains('dismissed'));
       card.style.display = ok ? '' : 'none';
     });
   }
