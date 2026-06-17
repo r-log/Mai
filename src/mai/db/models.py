@@ -224,3 +224,29 @@ class CommitPatch(Base):
     patch_id: Mapped[str | None] = mapped_column(String(64), nullable=True)   # git patch-id --stable
     normalized_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)  # Phase-2 fallback
     aggregate_of: Mapped[str | None] = mapped_column(String(255), nullable=True)    # Phase-2 PR-aggregate
+
+
+class PatchGroup(Base):
+    """Derived: a canonical fix identity, keyed by git patch-id; members span forks."""
+    __tablename__ = "patch_group"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    patch_id: Mapped[str] = mapped_column(String(64), unique=True)
+    created_at: Mapped[datetime] = mapped_column(default=_now)
+
+
+class Propagation(Base):
+    """Derived: whether a fix (patch_group) is present in a core, and how we know."""
+    __tablename__ = "propagation"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    patch_group_id: Mapped[str] = mapped_column(ForeignKey("patch_group.id"))
+    core: Mapped[str] = mapped_column(String(64))
+    present: Mapped[bool] = mapped_column(Boolean, default=False)
+    via: Mapped[str | None] = mapped_column(String(40), nullable=True)   # patch_id | cherry_trailer | "a+b"
+    confidence: Mapped[str] = mapped_column(String(16), default="high")  # high | medium
+    source_sha: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    evidence: Mapped[list] = mapped_column(JSON, default=list)
+    updated_at: Mapped[datetime] = mapped_column(default=_now, onupdate=_now)
+
+    __table_args__ = (
+        UniqueConstraint("patch_group_id", "core", name="uq_propagation"),
+    )
