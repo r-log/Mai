@@ -130,10 +130,13 @@ async def _commits_harvest() -> int:
 
 
 async def _sync_analyze() -> dict:
+    from mai.sync.classify import classify_subsystems
     from mai.sync.propagate import compute_propagation
 
     async with SessionFactory() as session:
-        return await compute_propagation(session)
+        propagation = await compute_propagation(session)
+        classification = await classify_subsystems(session)
+        return {"propagation": propagation, "classification": classification}
 
 
 async def _ips_crawl() -> int:
@@ -205,8 +208,11 @@ def main() -> None:
         print(f"commits-harvest: {count} new commits")
     elif args.cmd == "sync-analyze":
         result = asyncio.run(_sync_analyze())
-        print(f"sync-analyze: groups={result['groups']} present={result['present']} "
-              f"absent={result['absent']} cherry_links={result['cherry_links']}")
+        p, c = result["propagation"], result["classification"]
+        print(f"sync-analyze: groups={p['groups']} present={p['present']} "
+              f"absent={p['absent']} cherry_links={p['cherry_links']} | "
+              f"subsystems={c['total']} shared={c['shared']} "
+              f"expansion={c['expansion']} mixed={c['mixed']}")
 
 
 if __name__ == "__main__":
