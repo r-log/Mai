@@ -4,7 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from mai.db.models import Commit, CommitFile, PatchGroup, Propagation
-from mai.repository.port_candidate import PortCandidateRepository
+from mai.repository.port_candidate import PortCandidateRepository, magnitude_tier
 from mai.repository.subsystem_class import SubsystemClassRepository
 
 
@@ -78,7 +78,10 @@ async def compute_port_candidates(session: AsyncSession) -> dict:
             await cand_repo.mark_status(cand, "ported")
             auto_resolved += 1
 
-    candidates = len(await cand_repo.open_candidates())
+    open_now = await cand_repo.open_candidates()
+    tiers = {"surgical": 0, "small": 0, "moderate": 0, "bulk": 0}
+    for c in open_now:
+        tiers[magnitude_tier(c.magnitude)] += 1
     await session.commit()
-    return {"candidates": candidates, "skipped_unportable": skipped,
-            "auto_resolved": auto_resolved}
+    return {"candidates": len(open_now), "skipped_unportable": skipped,
+            "auto_resolved": auto_resolved, "tiers": tiers}

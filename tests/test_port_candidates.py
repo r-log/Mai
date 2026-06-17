@@ -84,3 +84,24 @@ async def test_recompute_idempotent_and_auto_resolves_when_ported(session):
     assert await session.scalar(
         select(func.count()).select_from(PortCandidate).where(
             PortCandidate.patch_group_id == p1.id, PortCandidate.target_core == "two")) == 1
+
+
+async def test_vendored_fix_emits_no_candidate(session):
+    # a fix touching only a vendored (dep/) subsystem must NOT graduate
+    await _commit(session, "three", "s3", "PV", "dep/zlib")
+    await _commit(session, "two", "s2", "PW", "dep/zlib")
+    await session.commit()
+    result = await _analyze(session)
+    assert result["candidates"] == 0
+    assert result["skipped_unportable"] == 2
+
+
+async def test_tier_distribution_reported(session):
+    # one surgical (mag 2) shared fix present in three, absent in two
+    await _commit(session, "three", "s3", "P1", "src/shared/Log", added=1, removed=1)
+    await _commit(session, "two", "s2", "P9", "src/shared/Log", added=1, removed=1)
+    await session.commit()
+    result = await _analyze(session)
+    assert "tiers" in result
+    assert result["tiers"]["surgical"] == 2   # both P1->two and P9->three are tiny
+    assert result["tiers"]["bulk"] == 0
