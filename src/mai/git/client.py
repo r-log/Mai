@@ -60,6 +60,8 @@ class LocalGitClient:
         # structured header fields (no body — body fetched separately to avoid newline clashes)
         fmt = "%H%n%an%n%aI%n%cn%n%cI%n%P"
         head = (await self._git(core, "show", "-s", f"--format={fmt}", sha)).split("\n")
+        if len(head) < 6:
+            raise GitError(f"unexpected git show output for {sha}: {head!r}")
         full_sha, an, aiso, cn, ciso, parents_line = head[0], head[1], head[2], head[3], head[4], head[5]
         parents = parents_line.split() if parents_line.strip() else []
         is_merge = len(parents) > 1
@@ -89,6 +91,9 @@ class LocalGitClient:
         nums = (await self._git(core, "show", "-M", "--numstat", "--format=", sha)).strip("\n")
         name_rows = [r for r in names.split("\n") if r]
         num_rows = [r for r in nums.split("\n") if r]
+        if len(name_rows) != len(num_rows):
+            raise GitError(f"name-status/numstat mismatch for {sha}: "
+                           f"{len(name_rows)} vs {len(num_rows)}")
         files: list[CommitFileMeta] = []
         for name_line, num_line in zip(name_rows, num_rows):
             nparts = name_line.split("\t")
