@@ -96,6 +96,31 @@ async def test_vendored_fix_emits_no_candidate(session):
     assert result["skipped_unportable"] == 2
 
 
+async def test_magnitude_counts_only_portable_files(session):
+    # A commit touching a tiny shared file + a huge vendored blob: the candidate's
+    # magnitude must reflect ONLY the shared portion, not the whole commit.
+    from mai.db.models import PatchGroup
+    c = Commit(core="three", sha="big", author="a", authored_at="t", committer="a",
+               committed_at="t", message="m", parent_shas=["p"], is_merge=False)
+    session.add(c)
+    await session.flush()
+    session.add(CommitPatch(commit_id=c.id, patch_id="PM"))
+    session.add(CommitFile(commit_id=c.id, path="src/shared/Log/x.cpp", change_type="M",
+                           added_lines=3, removed_lines=1, subsystem="src/shared/Log"))
+    session.add(CommitFile(commit_id=c.id, path="dep/zlib/big.c", change_type="M",
+                           added_lines=90000, removed_lines=10000, subsystem="dep/zlib"))
+    await _commit(session, "two", "s2", "POTHER", "src/shared/Log")  # gives 'two' presence
+    await session.commit()
+
+    await _analyze(session)
+    pm = await session.scalar(select(PatchGroup).where(PatchGroup.patch_id == "PM"))
+    cand = await PortCandidateRepository(session).get(pm.id, "two")
+    assert cand is not None
+    assert cand.subsystem == "src/shared/Log"   # vendored dep is not the representative
+    assert cand.magnitude == 4                  # 3+1 shared only, NOT 100004
+    assert cand.tier == "surgical"
+
+
 async def test_tier_distribution_reported(session):
     # one surgical (mag 2) shared fix present in three, absent in two
     await _commit(session, "three", "s3", "P1", "src/shared/Log", added=1, removed=1)

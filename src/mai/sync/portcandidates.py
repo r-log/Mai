@@ -47,7 +47,6 @@ async def compute_port_candidates(session: AsyncSession) -> dict:
             select(CommitFile).where(CommitFile.commit_id == commit.id)
         ))
         touched = sorted({f.subsystem for f in files})
-        magnitude = sum(f.added_lines + f.removed_lines for f in files)
 
         shared_subs = []
         for sub in touched:
@@ -57,6 +56,13 @@ async def compute_port_candidates(session: AsyncSession) -> dict:
         if not shared_subs:
             skipped += 1
             continue
+
+        # Magnitude counts only the PORTABLE (shared-subsystem) lines, so a big
+        # mixed commit (a vendoring blob that also nudges a shared file) is sized
+        # by its actual portable change, not the whole commit.
+        shared_set = set(shared_subs)
+        magnitude = sum(f.added_lines + f.removed_lines
+                        for f in files if f.subsystem in shared_set)
 
         rep = shared_subs[0]
         absent_cores = sorted(c for c, _ in gd["absent"])
