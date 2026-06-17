@@ -260,3 +260,24 @@ class SubsystemClass(Base):
     classification: Mapped[str] = mapped_column(String(16))   # shared | expansion | mixed
     source: Mapped[str] = mapped_column(String(16))           # seed | heuristic | ai | manual_override
     updated_at: Mapped[datetime] = mapped_column(default=_now, onupdate=_now)
+
+
+class PortCandidate(Base):
+    """Derived: a fix present in source_core, absent in target_core, in a portable subsystem."""
+    __tablename__ = "port_candidate"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    patch_group_id: Mapped[str] = mapped_column(ForeignKey("patch_group.id"))
+    source_core: Mapped[str] = mapped_column(String(64))
+    target_core: Mapped[str] = mapped_column(String(64))
+    subsystem: Mapped[str] = mapped_column(String(255))
+    classification: Mapped[str] = mapped_column(String(16))   # the qualifying class (shared)
+    magnitude: Mapped[int] = mapped_column(Integer, default=0)  # added+removed lines of the source fix
+    confidence: Mapped[str] = mapped_column(String(16), default="high")
+    evidence: Mapped[list] = mapped_column(JSON, default=list)
+    status: Mapped[str] = mapped_column(String(16), default="open")  # open | ported | dismissed
+    source_sha: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(default=_now, onupdate=_now)
+
+    __table_args__ = (
+        UniqueConstraint("patch_group_id", "target_core", name="uq_port_candidate"),
+    )
