@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     embedding_model: str = "openai/text-embedding-3-small"
     embedding_dimensions: int = 1536
     drift_subsystem_depth: int = 3
+    git_mirror_dir: str = "./mirrors"
 
 
 settings = Settings()

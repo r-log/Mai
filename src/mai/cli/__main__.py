@@ -115,6 +115,20 @@ async def _drift() -> int:
                                        depth=settings.drift_subsystem_depth)
 
 
+async def _commits_harvest() -> int:
+    from mai.git.client import LocalGitClient
+    from mai.git_harvest import commits_harvest_repo
+
+    client = LocalGitClient(settings.git_mirror_dir)
+    async with SessionFactory() as session:
+        repos = await RepoRepository(session).all()
+        total = 0
+        for repo in repos:
+            total += await commits_harvest_repo(session, client, repo)
+            await session.commit()
+    return total
+
+
 async def _ips_crawl() -> int:
     if not settings.firecrawl_api_key:
         raise SystemExit("FIRECRAWL_API_KEY not set")
@@ -147,6 +161,7 @@ def main() -> None:
     sub.add_parser("embed")
     sub.add_parser("correlate")
     sub.add_parser("drift")
+    sub.add_parser("commits-harvest")
     args = parser.parse_args()
 
     if args.cmd == "init-db":
@@ -177,6 +192,9 @@ def main() -> None:
     elif args.cmd == "drift":
         rows = asyncio.run(_drift())
         print(f"drift: {rows} subsystem observations")
+    elif args.cmd == "commits-harvest":
+        count = asyncio.run(_commits_harvest())
+        print(f"commits-harvest: {count} new commits")
 
 
 if __name__ == "__main__":
