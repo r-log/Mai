@@ -40,6 +40,7 @@ async def test_preserves_manual_override(session):
 
     result = await classify_subsystems(session)
     assert result["manual_preserved"] == 1
+    assert result["shared"] == 1
     row = await SubsystemClassRepository(session).get("src/game/Server")
     assert row.classification == "shared" and row.source == "manual_override"
 

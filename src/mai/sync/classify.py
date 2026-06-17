@@ -53,7 +53,7 @@ async def classify_subsystems(session: AsyncSession) -> dict:
         else:
             counts["manual_preserved"] += 1
             kept = await repo.get(subsystem)
-            counts[kept.classification] += 1
+            counts[kept.classification] = counts.get(kept.classification, 0) + 1
         counts["total"] += 1
     await session.commit()
     return counts
