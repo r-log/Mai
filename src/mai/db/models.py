@@ -181,3 +181,46 @@ class DriftObservation(Base):
     __table_args__ = (
         UniqueConstraint("fork_a", "fork_b", "subsystem", name="uq_drift_obs"),
     )
+
+
+class Commit(Base):
+    """Raw, append-only code truth: one git commit on a fork's default branch."""
+    __tablename__ = "commit"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    core: Mapped[str] = mapped_column(String(64))
+    sha: Mapped[str] = mapped_column(String(40))
+    author: Mapped[str] = mapped_column(String(255))
+    authored_at: Mapped[str] = mapped_column(String(40))
+    committer: Mapped[str] = mapped_column(String(255))
+    committed_at: Mapped[str] = mapped_column(String(40))
+    message: Mapped[str] = mapped_column(Text)
+    parent_shas: Mapped[list] = mapped_column(JSON, default=list)
+    is_merge: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(default=_now)
+
+    __table_args__ = (
+        UniqueConstraint("core", "sha", name="uq_commit_identity"),
+    )
+
+
+class CommitFile(Base):
+    """Raw per-file change within a commit (diffstat + rename + subsystem)."""
+    __tablename__ = "commit_file"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    commit_id: Mapped[str] = mapped_column(ForeignKey("commit.id"))
+    path: Mapped[str] = mapped_column(Text)
+    change_type: Mapped[str] = mapped_column(String(4))   # A | M | D | R | C | T
+    old_path: Mapped[str | None] = mapped_column(Text, nullable=True)
+    added_lines: Mapped[int] = mapped_column(Integer, default=0)
+    removed_lines: Mapped[int] = mapped_column(Integer, default=0)
+    subsystem: Mapped[str] = mapped_column(String(255))
+
+
+class CommitPatch(Base):
+    """Raw patch identity for a (non-merge) commit. patch_id is git's; the rest is reserved."""
+    __tablename__ = "commit_patch"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    commit_id: Mapped[str] = mapped_column(ForeignKey("commit.id"), unique=True)
+    patch_id: Mapped[str | None] = mapped_column(String(64), nullable=True)   # git patch-id --stable
+    normalized_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)  # Phase-2 fallback
+    aggregate_of: Mapped[str | None] = mapped_column(String(255), nullable=True)    # Phase-2 PR-aggregate
