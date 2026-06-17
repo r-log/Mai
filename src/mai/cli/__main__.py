@@ -213,12 +213,15 @@ def main() -> None:
         result = asyncio.run(_sync_analyze())
         p, c, pc = (result["propagation"], result["classification"],
                     result["port_candidates"])
+        t = pc["tiers"]
         print(f"sync-analyze: groups={p['groups']} present={p['present']} "
               f"absent={p['absent']} cherry_links={p['cherry_links']} | "
-              f"subsystems={c['total']} shared={c['shared']} "
-              f"expansion={c['expansion']} mixed={c['mixed']} | "
+              f"subsystems={c['total']} shared={c['shared']} expansion={c['expansion']} "
+              f"mixed={c['mixed']} vendored={c['vendored']} | "
               f"port_candidates={pc['candidates']} "
-              f"skipped={pc['skipped_unportable']} resolved={pc['auto_resolved']}")
+              f"(surgical={t['surgical']} small={t['small']} moderate={t['moderate']} "
+              f"bulk={t['bulk']}) skipped={pc['skipped_unportable']} "
+              f"resolved={pc['auto_resolved']}")
 
 
 if __name__ == "__main__":
