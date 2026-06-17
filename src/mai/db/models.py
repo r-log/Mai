@@ -250,3 +250,13 @@ class Propagation(Base):
     __table_args__ = (
         UniqueConstraint("patch_group_id", "core", name="uq_propagation"),
     )
+
+
+class SubsystemClass(Base):
+    """Derived: a subsystem's portability class. Auto-classified, manually overridable."""
+    __tablename__ = "subsystem_class"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    subsystem: Mapped[str] = mapped_column(String(255), unique=True)
+    classification: Mapped[str] = mapped_column(String(16))   # shared | expansion | mixed
+    source: Mapped[str] = mapped_column(String(16))           # seed | heuristic | ai | manual_override
+    updated_at: Mapped[datetime] = mapped_column(default=_now, onupdate=_now)
