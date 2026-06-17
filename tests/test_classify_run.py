@@ -21,15 +21,18 @@ async def test_classifies_distinct_subsystems(session):
     await _file(session, "src/game/Spells", "src/game/Spells/Spell.cpp")
     await _file(session, "src/game/Object", "src/game/Object/Player.cpp")
     await _file(session, "src/game/Object", "src/game/Object/Unit.cpp")  # dup subsystem
+    await _file(session, "dep/zlib", "dep/zlib/inflate.c")
     await session.commit()
 
     result = await classify_subsystems(session)
-    assert result["total"] == 3        # three distinct subsystems
-    assert result["shared"] == 1 and result["expansion"] == 1 and result["mixed"] == 1
+    assert result["total"] == 4        # four distinct subsystems
+    assert result["shared"] == 1 and result["expansion"] == 1
+    assert result["mixed"] == 1 and result["vendored"] == 1
     repo = SubsystemClassRepository(session)
     assert (await repo.get("src/shared/Database")).classification == "shared"
     assert (await repo.get("src/game/Spells")).classification == "expansion"
     assert (await repo.get("src/game/Object")).classification == "mixed"
+    assert (await repo.get("dep/zlib")).classification == "vendored"
 
 
 async def test_preserves_manual_override(session):

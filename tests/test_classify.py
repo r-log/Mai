@@ -6,13 +6,26 @@ from mai.sync.classify import classify_subsystem
 @pytest.mark.parametrize("subsystem", [
     "src/shared/Database",
     "src/shared",
-    "dep/recastnavigation/Recast",
     "src/realmd",
     "src/tools/Extractor_projects",
     "src/framework/Threading",
 ])
 def test_shared_infrastructure(subsystem):
     assert classify_subsystem(subsystem) == "shared"
+
+
+@pytest.mark.parametrize("subsystem", [
+    "dep",
+    "dep/bzip2",
+    "dep/StormLib/src",
+    "dep/recastnavigation",
+])
+def test_vendored_dependencies(subsystem):
+    assert classify_subsystem(subsystem) == "vendored"
+
+
+def test_tools_stays_shared_not_vendored():
+    assert classify_subsystem("src/tools/Extractor_projects") == "shared"
 
 
 @pytest.mark.parametrize("subsystem", [
