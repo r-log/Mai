@@ -294,3 +294,33 @@ class User(Base):
     must_change_password: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(default=_now)
     last_login: Mapped[datetime | None] = mapped_column(nullable=True)
+
+
+class BoardItem(Base):
+    """Durable human intent over one PortCandidate. Engine truth lives elsewhere."""
+    __tablename__ = "board_item"
+    port_candidate_id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    assignee: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    status: Mapped[str] = mapped_column(String(16), default="open")
+    related_pr: Mapped[str | None] = mapped_column(Text, nullable=True)
+    dismiss_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    archived: Mapped[bool] = mapped_column(Boolean, default=False)
+    updated_by: Mapped[str] = mapped_column(String(64))
+    updated_at: Mapped[datetime] = mapped_column(default=_now, onupdate=_now)
+
+
+class BoardEvent(Base):
+    """Append-only audit of board mutations."""
+    __tablename__ = "board_event"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    port_candidate_id: Mapped[str] = mapped_column(String(128), index=True)
+    seq: Mapped[int] = mapped_column(Integer)
+    actor: Mapped[str] = mapped_column(String(64))
+    action: Mapped[str] = mapped_column(String(24))
+    from_value: Mapped[str | None] = mapped_column(Text, nullable=True)
+    to_value: Mapped[str | None] = mapped_column(Text, nullable=True)
+    at: Mapped[datetime] = mapped_column(default=_now)
+
+    __table_args__ = (
+        UniqueConstraint("port_candidate_id", "seq", name="uq_board_event_seq"),
+    )
