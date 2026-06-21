@@ -1,7 +1,9 @@
 import secrets
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, HTTPException, Request
+from fastapi.responses import JSONResponse
 
+from mai.board.service import ClaimConflict, apply_action
 from mai.publish.dataviz import build_port_candidates
 from mai.repository.board import BoardItemRepository
 from mai.repository.users import UserRepository
@@ -50,5 +52,31 @@ def make_board_router(session_factory) -> APIRouter:
         board["me"] = {"username": username,
                        "is_maintainer": bool(user and user.is_maintainer)}
         return board
+
+    _MAINTAINER_ONLY = {"assign", "dismiss", "restore"}
+
+    @router.post("/{item_id}/{action}")
+    async def mutate(request: Request, item_id: str, action: str):
+        body = await request.json() if await request.body() else {}
+        if not body.get("csrf") or body["csrf"] != request.session.get("csrf"):
+            raise HTTPException(status_code=403, detail="bad csrf")
+        username = request.session["username"]
+        async with session_factory() as session:
+            user = await UserRepository(session).get(username)
+            is_maintainer = bool(user and user.is_maintainer)
+            if action in _MAINTAINER_ONLY and not is_maintainer:
+                raise HTTPException(status_code=403, detail="maintainer only")
+            try:
+                item = await apply_action(
+                    session, item_id=item_id, actor=username, action=action,
+                    value=body.get("value"), reason=body.get("reason"),
+                    related_pr=body.get("related_pr"))
+                await session.commit()
+            except ClaimConflict as exc:
+                return JSONResponse({"error": "already claimed",
+                                     "assignee": str(exc)}, status_code=409)
+            except ValueError as exc:
+                return JSONResponse({"error": str(exc)}, status_code=400)
+            return _overlay(item)
 
     return router

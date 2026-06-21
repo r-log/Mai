@@ -65,3 +65,66 @@ async def test_board_overlays_board_item(env):
     overlays = {o["port_candidate_id"]: o for o in body.get("_orphans", [])}
     assert overlays["pgX:three"]["assignee"] == "dev"
     assert overlays["pgX:three"]["status"] == "claimed"
+
+
+async def _csrf(ac):
+    return (await ac.get("/api/board")).json()["csrf"]
+
+
+async def test_claim_then_overlay_reflects_it(env):
+    ac, _, pws = env
+    await _login(ac, "dev", pws["dev"])
+    token = await _csrf(ac)
+    r = await ac.post("/api/board/pgA:three/claim", json={"csrf": token})
+    assert r.status_code == 200
+    assert r.json()["assignee"] == "dev"
+    assert r.json()["status"] == "claimed"
+
+
+async def test_csrf_required_for_mutation(env):
+    ac, _, pws = env
+    await _login(ac, "dev", pws["dev"])
+    await _csrf(ac)
+    r = await ac.post("/api/board/pgA:three/claim", json={})  # no csrf
+    assert r.status_code == 403
+
+
+async def test_non_maintainer_cannot_assign_or_dismiss(env):
+    ac, _, pws = env
+    await _login(ac, "dev", pws["dev"])
+    token = await _csrf(ac)
+    r = await ac.post("/api/board/pgA:three/assign",
+                      json={"value": "antz", "csrf": token})
+    assert r.status_code == 403
+    r2 = await ac.post("/api/board/pgA:three/dismiss",
+                       json={"reason": "no", "csrf": token})
+    assert r2.status_code == 403
+
+
+async def test_maintainer_can_assign(env):
+    ac, _, pws = env
+    await _login(ac, "antz", pws["antz"])
+    token = await _csrf(ac)
+    r = await ac.post("/api/board/pgA:three/assign",
+                      json={"value": "dev", "csrf": token})
+    assert r.status_code == 200
+    assert r.json()["assignee"] == "dev"
+
+
+async def test_claim_conflict_returns_409(env):
+    ac, factory, pws = env
+    async with factory() as s:
+        await apply_action(s, item_id="pgB:two", actor="someone", action="claim")
+        await s.commit()
+    await _login(ac, "dev", pws["dev"])
+    token = await _csrf(ac)
+    r = await ac.post("/api/board/pgB:two/claim", json={"csrf": token})
+    assert r.status_code == 409
+
+
+async def test_bad_action_returns_400(env):
+    ac, _, pws = env
+    await _login(ac, "antz", pws["antz"])
+    token = await _csrf(ac)
+    r = await ac.post("/api/board/pgA:three/frobnicate", json={"csrf": token})
+    assert r.status_code == 400
