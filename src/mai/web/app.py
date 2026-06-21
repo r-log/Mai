@@ -7,6 +7,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from starlette.middleware.sessions import SessionMiddleware
 
 from mai.repository.users import UserRepository
+from mai.web.board_api import make_board_router
 
 _PUBLIC = {"/login", "/logout"}
 
@@ -113,4 +114,5 @@ def create_app(session_factory, hasher, session_secret: str, *,
     async def home(request: Request) -> str:
         return _home_html(request.session.get("username") or "")
 
+    app.include_router(make_board_router(session_factory))
     return app

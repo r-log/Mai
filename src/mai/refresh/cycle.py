@@ -2,6 +2,7 @@ from dataclasses import dataclass
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from mai.publish.dataviz import build_port_candidates
 from mai.repository.repos import RepoRepository
 
 
@@ -11,6 +12,22 @@ class RefreshResult:
     harvested_repos: int
     port_candidates: int
     pages: int
+    archived_board_items: int
+
+
+async def reconcile_board(session) -> int:
+    """Archive board items whose candidate is no longer open (engine resolved it)."""
+    from mai.repository.board import BoardItemRepository
+
+    board = await build_port_candidates(session)
+    open_ids = {c["id"] for col in board["columns"] for c in col["candidates"]}
+    repo = BoardItemRepository(session)
+    archived = 0
+    for item in await repo.active():
+        if item.port_candidate_id not in open_ids:
+            item.archived = True
+            archived += 1
+    return archived
 
 
 async def run_refresh_cycle(
@@ -52,6 +69,9 @@ async def run_refresh_cycle(
     pc = await compute_port_candidates(session)
     await session.commit()
 
+    archived = await reconcile_board(session)
+    await session.commit()
+
     pages = await publish_site(session, ledger_path)
 
     if deploy_hook is not None:
@@ -62,4 +82,5 @@ async def run_refresh_cycle(
         harvested_repos=harvested,
         port_candidates=pc["candidates"],
         pages=pages,
+        archived_board_items=archived,
     )
