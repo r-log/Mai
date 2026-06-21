@@ -125,11 +125,33 @@ async def test_must_change_user_is_confined_to_set_password(client_and_pw):
     assert "new password" in sp.text.lower()
 
 
+async def test_set_password_requires_session(client_and_pw):
+    ac, _ = client_and_pw
+    r = await ac.get("/set-password")
+    assert r.status_code == 303
+    assert r.headers["location"] == "/login"
+    r2 = await ac.post("/set-password", data={"new_password": "a-good-long-password"})
+    assert r2.status_code == 303
+    assert r2.headers["location"] == "/login"
+
+
 async def test_set_password_rejects_short(client_and_pw):
     ac, pw = client_and_pw
     await ac.post("/login", data={"username": "antz", "password": pw})
     r = await ac.post("/set-password", data={"new_password": "short"})
     assert r.status_code == 400
+
+
+async def test_set_password_short_keeps_user_confined(client_and_pw):
+    ac, pw = client_and_pw
+    await ac.post("/login", data={"username": "antz", "password": pw})
+    r = await ac.post("/set-password", data={"new_password": "short"})
+    assert r.status_code == 400
+    assert "at least 8" in r.text.lower()
+    # still must_change → any other route bounces back to /set-password
+    home = await ac.get("/")
+    assert home.status_code == 303
+    assert home.headers["location"] == "/set-password"
 
 
 async def test_set_password_clears_flag_and_unlocks_board(client_and_pw):
