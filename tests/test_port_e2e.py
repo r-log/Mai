@@ -4,7 +4,6 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from mai.auth.accounts import create_account
 from mai.auth.fake import FakeHasher
-from mai.board.service import apply_action
 from mai.db.base import Base
 from mai.web.app import create_app
 
