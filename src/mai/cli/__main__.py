@@ -142,6 +142,45 @@ async def _sync_analyze() -> dict:
                 "port_candidates": port_candidates}
 
 
+async def _refresh() -> "object":
+    from mai.git.client import LocalGitClient
+    from mai.refresh.cycle import run_refresh_cycle
+    from mai.refresh.deploy import ShellDeployHook
+
+    git_client = LocalGitClient(settings.git_mirror_dir)
+    deploy_hook = (ShellDeployHook(settings.deploy_command)
+                   if settings.deploy_command else None)
+    http = None
+    github_client = None
+    if settings.github_token:
+        import httpx
+
+        from mai.github.client import HttpGitHubClient
+        http = httpx.AsyncClient()
+        github_client = HttpGitHubClient(
+            settings.github_token, base_url=settings.github_api_url, client=http)
+    try:
+        async with SessionFactory() as session:
+            return await run_refresh_cycle(
+                session, git_client=git_client, github_client=github_client,
+                ledger_path=settings.ledger_path, deploy_hook=deploy_hook)
+    finally:
+        if http is not None:
+            await http.aclose()
+
+
+async def _serve() -> None:
+    from mai.refresh.trigger import RealClock, run_cron
+
+    async def _cycle() -> None:
+        result = await _refresh()
+        print(f"refresh: +{result.new_commits} commits, "
+              f"{result.port_candidates} port candidates, {result.pages} pages")
+
+    await run_cron(_cycle, interval_seconds=settings.refresh_interval_seconds,
+                   clock=RealClock())
+
+
 async def _ips_crawl() -> int:
     if not settings.firecrawl_api_key:
         raise SystemExit("FIRECRAWL_API_KEY not set")
@@ -161,7 +200,7 @@ async def _ips_crawl() -> int:
             return await crawl_all(session, client)
 
 
-def main() -> None:
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="mai")
     sub = parser.add_subparsers(dest="cmd", required=True)
     sub.add_parser("init-db")
@@ -176,7 +215,13 @@ def main() -> None:
     sub.add_parser("drift")
     sub.add_parser("commits-harvest")
     sub.add_parser("sync-analyze")
-    args = parser.parse_args()
+    sub.add_parser("refresh")
+    sub.add_parser("serve")
+    return parser
+
+
+def main() -> None:
+    args = build_parser().parse_args()
 
     if args.cmd == "init-db":
         asyncio.run(_init_db())
@@ -222,6 +267,15 @@ def main() -> None:
               f"(surgical={t['surgical']} small={t['small']} moderate={t['moderate']} "
               f"bulk={t['bulk']}) skipped={pc['skipped_unportable']} "
               f"resolved={pc['auto_resolved']}")
+    elif args.cmd == "refresh":
+        result = asyncio.run(_refresh())
+        print(f"refresh: +{result.new_commits} commits, "
+              f"{result.harvested_repos} repos harvested, "
+              f"{result.port_candidates} port candidates, {result.pages} pages")
+    elif args.cmd == "serve":
+        print(f"serving: refresh every {settings.refresh_interval_seconds}s "
+              "(Ctrl-C to stop)")
+        asyncio.run(_serve())
 
 
 if __name__ == "__main__":

@@ -21,6 +21,8 @@ class Settings(BaseSettings):
     embedding_dimensions: int = 1536
     drift_subsystem_depth: int = 3
     git_mirror_dir: str = "./mirrors"
+    refresh_interval_seconds: int = 10800
+    deploy_command: str | None = None
 
 
 settings = Settings()
