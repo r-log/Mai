@@ -22,7 +22,8 @@
         return r.json();
       })
       .then(function (j) { if (!j) return; data = j; me = j.me; csrf = j.csrf;
-        renderSummary(); renderFilters(); render(); });
+        renderSummary(); renderFilters(); render(); })
+      .catch(function () { toast('could not load board'); });
   }
 
   function renderSummary() {
@@ -63,9 +64,11 @@
   function statusOf(c) { var b = overlay(c); return b ? b.status : 'open'; }
 
   function cardHTML(c) {
+    // TIER maps to a hard-coded hex (or fallback); c.tier itself is never interpolated into CSS
     var dot = '<span class="tdot" style="background:' + (TIER[c.tier] || '#59636e') + '"></span>';
-    var link = c.source_url
-      ? '<a class="src-link" href="' + esc(c.source_url) + '" target="_blank" rel="noopener">↗</a>' : '';
+    var safeUrl = /^https?:\/\//.test(c.source_url || '') ? c.source_url : '';
+    var link = safeUrl
+      ? '<a class="src-link" href="' + esc(safeUrl) + '" target="_blank" rel="noopener">↗</a>' : '';
     var who = assigneeOf(c), st = statusOf(c);
     var chip = who
       ? '<span class="chip ' + (who === (me && me.username) ? 'mine' : '') + '">' + esc(who) + '</span>'
