@@ -1,3 +1,5 @@
+import html
+import secrets
 from datetime import datetime, timezone
 
 from fastapi import FastAPI, Form, Request
@@ -24,8 +26,16 @@ def _login_html(error: str = "") -> str:
         </form>""")
 
 
+def _home_html(username: str) -> str:
+    safe = html.escape(username)
+    return _page("Mai", f"<p>signed in as {safe}</p>"
+                        "<form method='post' action='/logout'>"
+                        "<button>Log out</button></form>")
+
+
 def create_app(session_factory, hasher, session_secret: str, *,
                cookie_secure: bool = True) -> FastAPI:
+    dummy_hash = hasher.hash(secrets.token_urlsafe(16))
     app = FastAPI()
 
     @app.middleware("http")
@@ -52,7 +62,9 @@ def create_app(session_factory, hasher, session_secret: str, *,
                     password: str = Form(...)):
         async with session_factory() as session:
             user = await UserRepository(session).get(username)
-            if user is None or not hasher.verify(password, user.password_hash):
+            target = user.password_hash if user is not None else dummy_hash
+            password_ok = hasher.verify(password, target)
+            if user is None or not password_ok:
                 return HTMLResponse(
                     _login_html("Invalid username or password"), status_code=401)
             user.last_login = datetime.now(timezone.utc)
@@ -70,8 +82,6 @@ def create_app(session_factory, hasher, session_secret: str, *,
 
     @app.get("/", response_class=HTMLResponse)
     async def home(request: Request) -> str:
-        return _page("Mai", f"<p>signed in as {request.session.get('username')}</p>"
-                            "<form method='post' action='/logout'>"
-                            "<button>Log out</button></form>")
+        return _home_html(request.session.get("username") or "")
 
     return app

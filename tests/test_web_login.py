@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from mai.auth.accounts import create_account
 from mai.auth.fake import FakeHasher
 from mai.db.base import Base
-from mai.web.app import create_app
+from mai.web.app import _home_html, create_app
 
 
 @pytest_asyncio.fixture
@@ -70,3 +70,44 @@ async def test_logout_clears_session(client_and_pw):
     assert r.headers["location"] == "/login"
     after = await ac.get("/")
     assert after.status_code == 303 and after.headers["location"] == "/login"
+
+
+class SpyHasher:
+    """Wraps FakeHasher and counts verify() calls."""
+
+    def __init__(self) -> None:
+        self._inner = FakeHasher()
+        self.verify_calls = 0
+
+    def hash(self, password: str) -> str:
+        return self._inner.hash(password)
+
+    def verify(self, password: str, hashed: str) -> bool:
+        self.verify_calls += 1
+        return self._inner.verify(password, hashed)
+
+
+async def test_unknown_user_still_calls_verify():
+    """Dummy verify must run even when the username is not found (timing fix)."""
+    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+    async with engine.begin() as conn:
+        from mai.db.base import Base as _Base
+        await conn.run_sync(_Base.metadata.create_all)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    spy = SpyHasher()
+    app = create_app(factory, spy, "test-secret", cookie_secure=False)
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test",
+                           follow_redirects=False) as ac:
+        r = await ac.post("/login",
+                          data={"username": "nobody", "password": "x"})
+    await engine.dispose()
+    assert r.status_code == 401
+    assert spy.verify_calls >= 1
+
+
+def test_home_html_escapes_username():
+    """HTML metacharacters in username must be escaped in the home page."""
+    page = _home_html("<b>hi</b>")
+    assert "<b>hi</b>" not in page
+    assert "&lt;b&gt;" in page
