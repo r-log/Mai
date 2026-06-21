@@ -19,8 +19,9 @@ related:
 > runs the CLI by hand. This spec turns Mai into the **live, shared, self-updating
 > cross-fork porting cockpit** Antz asked for: an always-on backend that (a) **stays
 > truthful on its own** — a read-only GitHub App fires the refresh the moment a PR merges,
-> with cron as the always-on backstop — and (b) holds **shared board state** so people sign
-> in with GitHub, **claim or get assigned** ports, and everyone sees the same board across
+> with cron as the always-on backstop — and (b) holds **shared board state** behind a
+> **closed login** (admin-provisioned accounts, no public sign-up) so the people we invite
+> **claim or get assigned** ports, and everyone signed in sees the same board across
 > all four cores. The hard guarantee underneath it: **the engine owns "what's true" (proven
 > from code); humans own "what we're doing about it" (assignment + workflow). A human click
 > can never make the site lie**, because "still needs porting" is always recomputed from the
@@ -33,10 +34,10 @@ related:
 This spec makes the port-debt board **live and collaborative** by standing up one always-on
 backend that the static site so far could not have. The backend does three jobs: it runs the
 existing engine's **refresh cycle** on a schedule + GitHub-App webhook so the data is fresh
-without anyone touching a CLI; it serves a small **board API** (sign in with GitHub; claim /
-assign / set-status / dismiss a port) backed by a new **`BoardItem`** human-intent layer keyed
-to the engine's `PortCandidate`; and it hosts the git-worker that already produces the truth.
-The site moves off `localhost` to a real URL; the `/port/` page keeps its **target-fork columns**
+without anyone touching a CLI; it serves a small **board API behind a login** (admin-provisioned
+username + password; claim / assign / set-status / dismiss a port) backed by a new **`BoardItem`**
+human-intent layer keyed to the engine's `PortCandidate`; and it hosts the git-worker that already
+produces the truth. The site moves off `localhost` to a real URL; the `/port/` page keeps its **target-fork columns**
 but gains **view toggles** (All cores · My ports · By person), live assignee/status from the API,
 and self-claim + maintainer-assign. Audience: getMaNGOS maintainers (Antz, MadMax) + r-log. It
 replaces the v1 `localStorage` triage (the seam v1 reserved) with shared server state — and turns
@@ -47,11 +48,15 @@ replaces the v1 `localStorage` triage (the seam v1 reserved) with shared server 
 **Goals**
 - **Self-freshness:** a single `run_refresh_cycle()` driven by a **GitHub App webhook** (instant on
   push / PR-merge) with a **cron backstop** (always on), so the site is truthful with no manual step.
-- **Shared identity:** **Sign in with GitHub** (OAuth); identity = real GitHub handle.
+- **Closed identity:** a **username + password login**; accounts are **admin-provisioned** (we run a CLI
+  to create each one and hand out credentials privately) — **no public sign-up, no anonymous access**.
+  The login is the **sole gate**: no valid session → nothing but the login page.
+- **First-login password change:** the password we issue is one-time; on first login the user must set
+  their own (a `must_change_password` flag), so the DM'd credential never stays the real one.
 - **Shared board state:** a server-side **`BoardItem`** per port candidate — assignee + workflow
   status + dismissal — visible to everyone, with an append-only history of who-did-what-when.
-- **Assignment:** anyone signed in can **self-claim**; **maintainers** (allowlisted logins, e.g. Antz,
-  r-log) can **assign / reassign** others. One assignee per card.
+- **Assignment:** anyone logged in can **self-claim**; **maintainers** (accounts flagged `is_maintainer`,
+  e.g. Antz, r-log) can **assign / reassign** others. One assignee per card.
 - **All cores at a glance:** keep target-fork columns; add **All cores · My ports · By person** views
   and tier/subsystem/source filters over the live data.
 - **Hosting:** deploy the backend + git-worker on one small always-on box (VPS / Fly.io), board &
@@ -66,9 +71,11 @@ replaces the v1 `localStorage` triage (the seam v1 reserved) with shared server 
   porting cockpit: who's taking which fix, what stage it's at.
 - **No new engine truth logic.** Propagation / classification / PortCandidate are consumed as-is; this
   spec adds the freshness *trigger*, the *delivery* (hosting), and the *human-intent* layer.
-- **No multi-tenant / per-user private boards in v1.** One shared board for the maintainer group.
+- **No multi-tenant / per-user private boards in v1.** One shared board for the invited group.
   (Personal lenses are *filters* over the shared board, not separate boards.)
-- **No password accounts.** GitHub OAuth only.
+- **No public registration / self-signup.** There is no sign-up page; accounts exist only because an
+  admin created them. **Login only.** (Account creation is a CLI run by us on the box.)
+- **No GitHub OAuth / third-party identity.** Identity is our own account table, nothing external.
 
 ## 3. Context & Constraints
 
@@ -108,12 +115,15 @@ replaces the v1 `localStorage` triage (the seam v1 reserved) with shared server 
    the same id v1 used — so a re-derived candidate keeps its assignee/status across refreshes.
 6. **Auto-resolve archives, never deletes.** When the engine marks a candidate `ported`, its `BoardItem`
    is **archived** (kept for history/credit), not dropped — "who ported what" stays answerable.
-7. **Identity is a real GitHub user.** Every assignment/action is attributed to an authenticated GitHub
-   login; no anonymous mutation.
-8. **Maintainer is data, not code.** The set of logins who may assign-others / dismiss is a config
-   allowlist (or GitHub org/repo-admin lookup), never hardcoded — same install serves r-log and getMaNGOS.
-9. **Install-target-agnostic.** Tracked forks come from the registry; the webhook carries the installation
-   id; nothing assumes r-log's forks vs getMaNGOS's.
+7. **Closed identity; login is the gate.** Every page and API call requires a valid session from an
+   **admin-provisioned account**; there is no self-registration and no anonymous read or write. Every
+   assignment/action is attributed to its username.
+8. **Passwords are never stored in clear.** Stored as an **argon2id** hash; a freshly-provisioned account
+   carries `must_change_password=true` and must set its own password before doing anything else.
+9. **Maintainer is data, not code.** Whether an account may assign-others / dismiss / create accounts is the
+   `is_maintainer` flag on its `User` row, set at creation — never hardcoded.
+10. **Install-target-agnostic.** Tracked forks come from the registry; the webhook carries the installation
+    id; nothing assumes r-log's forks vs getMaNGOS's.
 
 ## 5. System Architecture
 
@@ -130,25 +140,28 @@ replaces the v1 `localStorage` triage (the seam v1 reserved) with shared server 
   │  run_refresh_cycle():  git fetch mirrors → commits-harvest →           │
   │     harvest PRs → sync-analyze → publish JSON → trigger Pages build    │  ENGINE (exists)
   │                                                                        │  + FRESHNESS (new)
-  │  Board API (FastAPI):  GET board · POST claim/assign/status/dismiss    │  BOARD (new)
-  │     auth: Sign in with GitHub (OAuth) → session                        │
+  │  Board app (FastAPI):  /login · /set-password · GET board ·           │  BOARD (new)
+  │     POST claim/assign/status/dismiss   (session required for ALL)      │
+  │     auth: username + password (admin-provisioned, argon2id) → session  │
   │     reads PortCandidate (truth) + writes BoardItem/BoardEvent (intent) │
   └──────────────────────────────────────────────────────────────────────┘
-      │ git-worker mirrors (disk)        │ SQL                 │ static export
+      │ git-worker mirrors (disk)        │ SQL                 │ serves gated UI + JSON
       ▼                                  ▼                     ▼
-  mirrors/<core>.git (volume)     Neon Postgres          mai-data/ → Cloudflare Pages
-                                  (derived + board)       (Hugo site; /port/ shell)
+  mirrors/<core>.git (volume)     Neon Postgres          Hugo-built assets served
+                                  (derived + board + users)  BEHIND the login session
                                                                   │  fetch board state
                                                                   ▼
                                           /port/  → live shared board (cols + toggles + assignees)
+                                          (no valid session → only /login is reachable)
 ```
 
 - **Truth topology:** raw `Commit*` + git mirrors = code truth; `PortCandidate` = derived truth;
   `BoardItem` = durable human intent. Three layers, one join key (§Invariant 5).
-- **Delivery topology:** the **static Hugo site stays on Cloudflare Pages** (fast, cheap) and renders the
-  engine's `port_candidates.json` snapshot as the card spine; the **`/port/` page hydrates live board
-  state** (assignee/status) from the backend API after GitHub sign-in. Cards exist without the API
-  (read-only fallback); the API adds identity + shared mutation.
+- **Delivery topology:** because the login is the **sole gate**, the board is **not** a publicly-readable
+  static site. The backend serves the login page and, only to an authenticated session, the `/port/` page
+  + its `port_candidates.json` snapshot (the card spine) and the live `BoardItem` overlay. Hugo still
+  *builds* the static assets; the backend *serves* them behind the session (a static mount), rather than a
+  public Cloudflare Pages site. There is no anonymous read-only view.
 - **The git-worker is the one stateful component** (needs a disk for bare clones) — hence a box with a
   volume, not a pure edge function (sync-engine §8).
 
@@ -165,9 +178,9 @@ pure code-truth function and dismissal is shared + reversible + audited.
 
 | Entity | Key | Fields |
 |---|---|---|
-| **BoardItem** | `port_candidate_id` = `f"{patch_group_id}:{target_core}"` | `assignee` (github login \| null), `status` ∈ {open, claimed, in_progress, pr_linked, dismissed}, `related_pr` (url \| null), `dismiss_reason` (null unless dismissed), `archived` (bool — set when engine auto-resolves), `updated_by`, `updated_at` |
-| **BoardEvent** | `(board_item, seq)` | append-only audit: `actor` (login), `action` ∈ {claim, assign, unassign, status, link_pr, dismiss, restore, auto_resolve}, `from`, `to`, `at` |
-| **User** | `github_login` | `display_name`, `avatar_url`, `is_maintainer` (resolved from allowlist/GitHub), `last_seen` |
+| **BoardItem** | `port_candidate_id` = `f"{patch_group_id}:{target_core}"` | `assignee` (username \| null), `status` ∈ {open, claimed, in_progress, pr_linked, dismissed}, `related_pr` (url \| null), `dismiss_reason` (null unless dismissed), `archived` (bool — set when engine auto-resolves), `updated_by`, `updated_at` |
+| **BoardEvent** | `(board_item, seq)` | append-only audit: `actor` (username), `action` ∈ {claim, assign, unassign, status, link_pr, dismiss, restore, auto_resolve}, `from`, `to`, `at` |
+| **User** | `username` | `password_hash` (argon2id), `display_name`, `is_maintainer` (set at creation), `must_change_password` (bool; true on a freshly-provisioned account), `created_at`, `last_login` |
 
 - **`status` is workflow, not truth.** `pr_linked` means "a PR is open," **not** "ported." Only the engine
   flips a candidate to `ported`; that auto-archives the `BoardItem` (§Invariant 6) and the card leaves the
@@ -189,17 +202,24 @@ pure code-truth function and dismissal is shared + reversible + audited.
    New candidates simply appear in the snapshot; existing `BoardItem`s re-bind by stable id (§Invariant 5).
 4. Trigger a **Cloudflare Pages** rebuild of the static site from the fresh JSON.
 
+**Auth (gate) — API:**
+- `POST /login` (username + password) → on success issues a session cookie; if `must_change_password`,
+  the session is restricted to `/set-password` until the user sets a new one. `POST /logout` clears it.
+- `POST /set-password` (authenticated) → verifies the new password, argon2id-hashes it, clears
+  `must_change_password`. **Every other route requires a valid (unrestricted) session.**
+
 **Board mutation (intent) — API:**
 - `GET /api/board` → merges the current `port_candidates.json` snapshot with `BoardItem` rows → the live
-  board (cards + assignee/status). Public-read within the access gate.
-- `POST /api/board/{id}/claim` (any auth user) · `/assign` (maintainer; body = login) · `/status` ·
-  `/link-pr` · `/dismiss` (reason) · `/restore`. Each validates auth + role, upserts `BoardItem`, appends a
+  board (cards + assignee/status). **Requires a valid session** (login is the gate).
+- `POST /api/board/{id}/claim` (any logged-in user) · `/assign` (maintainer; body = username) · `/status` ·
+  `/link-pr` · `/dismiss` (reason) · `/restore`. Each validates session + role, upserts `BoardItem`, appends a
   `BoardEvent`. Idempotent where natural (re-claiming by the same user is a no-op).
 
 ## 8. UX Design — `/port/` (live)
 
-- **Sign-in:** a "Sign in with GitHub" control; signed-out = read-only board (see everything, mutate
-  nothing). Signed-in = claim/status; maintainers also = assign/dismiss.
+- **Login:** a username + password form is the only thing an unauthenticated visitor can reach — there is
+  no public/read-only view. First login with a freshly-issued password redirects to **Set your password**
+  before the board is shown. After login: claim/status; maintainers also = assign/dismiss; a logout control.
 - **Spine:** columns **Port into ZERO / ONE / TWO / THREE**, each tier-sorted (surgical→bulk), every fork
   shown even if empty ("all cores", never "broken").
 - **View toggles:** **All cores** (default) · **My ports** (cards assigned to me) · **By person** (group by
@@ -210,7 +230,9 @@ pure code-truth function and dismissal is shared + reversible + audited.
   commit · expand for evidence + history. Maintainers see an `Assign ▾` and `Dismiss` affordance.
 - **Freshness indicator:** "updated <time> ago" from the last refresh; a subtle marker when the App webhook
   (vs cron) drove it.
-- **Fail-soft:** with no API/session, the page still renders the static cards (read-only) from the JSON.
+- **Fail-soft:** if the backend is up but a *board mutation* fails (e.g. someone else just claimed a card),
+  the UI shows the current state and a clear notice — it never silently drops the action. (There is no
+  anonymous static fallback: the board is only reachable with a session.)
 
 ## 9. Interfaces & Contracts
 
@@ -218,8 +240,12 @@ pure code-truth function and dismissal is shared + reversible + audited.
   `push, pull_request`. No write scopes. (From sync-engine §9; this spec installs/operates it.)
 - **`Trigger` protocol** (new) — `WebhookTrigger`, `CronTrigger`; both call `run_refresh_cycle()`. `FakeTrigger`
   for tests. Webhook handler verifies HMAC, debounces, maps installation id → registry forks.
-- **Board API** (new, FastAPI) — endpoints in §7; request/response pydantic schemas; auth via GitHub OAuth
-  session cookie; role checks against the maintainer allowlist.
+- **Auth** (new) — `PasswordHasher` seam (argon2id via `argon2-cffi`, with a `FakeHasher` for fast tests);
+  session middleware that rejects any request without a valid (unrestricted) session; `mai user-add
+  <username> [--maintainer]` CLI that creates a `User` with a generated one-time password (printed once)
+  and `must_change_password=true`; plus `mai user-list`. **No registration endpoint exists.**
+- **Board API** (new, FastAPI) — endpoints in §7; request/response pydantic schemas; auth via a signed
+  session cookie issued on username+password login; role checks against the `is_maintainer` flag.
 - **Repositories** (new, behind the seam) — `BoardItemRepository`, `BoardEventRepository`, `UserRepository`.
 - **`GET /api/board` contract** — `{ summary, columns:[{core, count, candidates:[{...port fields..., board:{
   assignee, status, related_pr, dismissed, history_count}}]}] }`; the engine fields mirror
@@ -228,15 +254,21 @@ pure code-truth function and dismissal is shared + reversible + audited.
 
 ## 10. Security & Access
 
-- **Auth:** GitHub OAuth (web flow); short-lived signed session cookie; CSRF protection on mutations.
-- **Authorization:** any authenticated user may claim/status their own work; **assign-others, dismiss,
-  restore** require `is_maintainer` (allowlist of logins / GitHub repo-admin), enforced server-side (never
-  trust the client).
-- **App secrets:** App id, private key, webhook secret, OAuth client id/secret in the platform secret store
-  / `.env` (gitignored); webhook deliveries HMAC-verified.
-- **Site gate:** the whole site stays dev-only behind **Cloudflare Access** (the existing posture); GitHub
-  OAuth is the identity *inside* the gate. Public-repo data only; no PII beyond public commit/author metadata.
-- **Read-only externally** remains absolute — the App can never write to GitHub.
+- **Auth:** username + password against an **admin-provisioned** `User` table. Passwords stored as
+  **argon2id** hashes (never plaintext, never reversible); login issues a signed, HTTP-only, `Secure`,
+  `SameSite` session cookie. CSRF protection on all mutating routes. Generic "invalid username or password"
+  on failure (no user-enumeration); rate-limit/backoff on repeated failures.
+- **Login is the sole gate:** session middleware rejects every unauthenticated request (302 → `/login`);
+  there is **no anonymous read path** to the board or its data. No third-party identity, no OAuth.
+- **First-login change:** a provisioned account's `must_change_password=true` confines its session to
+  `/set-password` until it sets its own password — so a credential shared over DM is never the standing one.
+- **Authorization:** any logged-in user may claim/status their own work; **assign-others, dismiss, restore,
+  and account creation** require `is_maintainer`, enforced server-side (never trust the client).
+- **Secrets:** session-signing key, the (data) GitHub App id/private key/webhook secret in `.env`
+  (gitignored) / platform secret store; webhook deliveries HMAC-verified. Public-repo data only; no PII
+  beyond public commit/author metadata.
+- **Read-only externally** remains absolute — the data App can never write to GitHub; Mai's only writes are
+  to its own DB.
 
 ## 11. Edge Cases & Failure Modes
 
@@ -247,9 +279,12 @@ pure code-truth function and dismissal is shared + reversible + audited.
 | 3 | Dropped/duplicate webhook | Cron backstop reconciles regardless; refresh is idempotent so a duplicate is a no-op. |
 | 4 | Candidate re-derived under a new patch group (rare) | Stable id is `patch_group_id:target_core`; if the group id changes, the old `BoardItem` archives (no current candidate) and a fresh one starts — audited, never silently moved. |
 | 5 | Two users claim the same card near-simultaneously | First write wins (unique `BoardItem` upsert + optimistic check); second sees the current assignee and a "already claimed by @x" notice. |
-| 6 | Non-maintainer tries to assign others / dismiss | 403 server-side; UI hides the affordance but the server is the gate. |
+| 6 | Non-maintainer tries to assign others / dismiss / create account | 403 server-side; UI hides the affordance but the server is the gate. |
 | 7 | Dismissed candidate still absent in code | Stays dismissed (with reason) under default filters; `restore` brings it back; engine auto-resolve still overrides if it ports. |
-| 8 | Backend/API down | Static site still serves read-only cards from `port_candidates.json`; mutations disabled with a clear banner. |
+| 8 | Backend/app down | The whole board is behind the session, so it is simply unavailable (login page errors) — there is **no** anonymous static fallback by design. Restart-on-failure (runbook) keeps downtime short. |
+| 8a | Wrong password / unknown username | Generic "invalid username or password" (no enumeration); failed attempts rate-limited/backed-off. |
+| 8b | User with `must_change_password` tries to reach the board | Session is confined to `/set-password`; any other route 302s back to it until the password is set. |
+| 8c | Lost/forgotten password | A maintainer re-runs `mai user-add`-style reset (re-issues a one-time password, sets `must_change_password=true`); no self-service email reset in v1. |
 | 9 | Force-push / rebased fork history | Cursor stored as SHA; re-walk from merge-base (sync-engine §11.9); raw commits append-only, so board ids stay stable. |
 | 10 | First clone of four full repos is large/slow | One-time per fork on the worker volume; thereafter incremental `git fetch` (sync-engine §11.7). |
 | 11 | Webhook storm (many pushes) | Debounce/coalesce into one cycle (sync-engine §10). |
@@ -261,12 +296,15 @@ Each phase ships something usable and leaves the prior state working.
 - **Phase A — Deploy + cron freshness + live read-only board.** Stand up the backend box (FastAPI +
   git-worker + cron) + Neon + Cloudflare Pages; implement `Trigger` seam with **`CronTrigger`** +
   `run_refresh_cycle()` (orchestrating the existing stages incrementally); deploy the static site to a real
-  URL behind Cloudflare Access; Pages rebuild on refresh. **Outcome: an always-on, self-refreshing,
-  all-cores port-debt site you can show Antz** (board still read-only). *This is the fastest value drop.*
-- **Phase B — Identity + shared board state.** GitHub OAuth sign-in; `User/BoardItem/BoardEvent` models +
-  repositories; board API (claim/assign/status/link-pr/dismiss/restore) with role enforcement; `/port/`
-  hydrates live state and exposes **All cores · My ports · By person** + assign/claim UI. **Outcome: the
-  collaborative cockpit** — shared, assignable, audited.
+  URL behind an interim Cloudflare Access gate (**replaced by the app login in Phase B**); Pages rebuild on
+  refresh. **Outcome: an always-on, self-refreshing, all-cores port-debt site you can show Antz** (board
+  still read-only). *This is the fastest value drop.* *(Phase A is built + merged.)*
+- **Phase B — Closed login + shared board state.** `User` model + argon2id `PasswordHasher` seam + `mai
+  user-add`/`user-list` CLI (admin-provisioned accounts, one-time password, `must_change_password`); session
+  middleware as the **sole gate** (`/login`, `/logout`, `/set-password`, no registration); `BoardItem/
+  BoardEvent` models + repositories; board API (claim/assign/status/link-pr/dismiss/restore) with role
+  enforcement; `/port/` served behind the session, hydrating live state and exposing **All cores · My ports ·
+  By person** + assign/claim UI. **Outcome: the collaborative cockpit** — gated, shared, assignable, audited.
 - **Phase C — Instant webhook + GitHub App.** Add **`WebhookTrigger`** (App `push`/`pull_request`, HMAC,
   debounce) + smee.io dev forwarding; install the read-only App on r-log forks; wire installation-id →
   registry. **Outcome: refresh is instant on PR-merge**, cron now backstop-only.
@@ -281,10 +319,11 @@ Phases A–B are the MVP Antz uses; C–D harden and generalize.
 | # | Item | Owner |
 |---|------|-------|
 | 1 | Exact host (small VPS vs Fly.io machine) + volume sizing for four bare mirrors; pick one in Phase A. | r-log |
-| 2 | Maintainer allowlist source: static config vs GitHub org/repo-admin lookup (start config, revisit). | r-log / Antz |
+| 2 | Who gets `is_maintainer` at launch (r-log + Antz?); confirm the maintainer set when provisioning accounts. | r-log / Antz |
 | 3 | Cron interval for the backstop (e.g. 1–3h) before the webhook lands in Phase C. | r-log |
-| 4 | OAuth app registration + callback domain under `r-log.org/mai`; CORS between Pages site and API. | r-log |
-| 5 | Live `/port/` is now dynamic (API hydrate) on a static-Pages site — confirm CSP/fetch + read-only fallback. | r-log |
+| 4 | Session store: signed stateless cookie vs server-side session table (start signed-cookie; revisit if revocation needed). | r-log |
+| 5 | Serving model shift: Phase A's public Cloudflare Pages deploy → Phase B serves `/port/` + JSON **behind the login session** (backend static mount). Confirm the Phase A Pages site is retired/locked once B lands so nothing is anonymously readable. | r-log |
+| 5a | Login-failure rate-limit / lockout policy (simple per-IP backoff in v1?). | r-log |
 | 6 | Neon free-tier limits for board state + derived data; Hyperdrive vs direct connection from the box. | r-log |
 | 7 | Should "dismiss" ever feed back to the engine as a suppression signal, or stay purely board-side? (v1: board-side only.) | r-log |
 | 8 | r-log forks may lag real getMaNGOS activity; supplement with periodic real-repo audits (sync-engine §14.6). | r-log / Antz |
@@ -298,7 +337,9 @@ Phases A–B are the MVP Antz uses; C–D harden and generalize.
 - **BoardEvent** — append-only audit entry (who did what, when) for a `BoardItem`.
 - **run_refresh_cycle()** — the one idempotent function that brings the engine + site up to date; webhook
   accelerates, cron backstops.
-- **Maintainer** — a login allowed to assign-others / dismiss / restore (config/GitHub-resolved, not hardcoded).
+- **Maintainer** — an account with `is_maintainer=true`, allowed to assign-others / dismiss / restore / create accounts.
+- **Admin-provisioned account** — a `User` created by a maintainer via `mai user-add`; there is no self-registration.
+- **Sole gate** — the login: every page/API requires a valid session; no anonymous read or write exists.
 - **Target / source fork** — the fork that lacks / has the fix (board column / card `from`).
 - **Tier** — magnitude band: surgical ≤50 / small ≤500 / moderate ≤5000 / bulk >5000 (portable lines).
 
