@@ -181,6 +181,24 @@ async def _serve() -> None:
                    clock=RealClock())
 
 
+async def _user_add(username: str, is_maintainer: bool) -> str:
+    from mai.auth.accounts import create_account
+    from mai.auth.hasher import Argon2Hasher
+
+    async with SessionFactory() as session:
+        password = await create_account(session, Argon2Hasher(), username,
+                                        is_maintainer=is_maintainer)
+        await session.commit()
+    return password
+
+
+async def _user_list() -> list:
+    from mai.repository.users import UserRepository
+
+    async with SessionFactory() as session:
+        return await UserRepository(session).all()
+
+
 async def _ips_crawl() -> int:
     if not settings.firecrawl_api_key:
         raise SystemExit("FIRECRAWL_API_KEY not set")
@@ -217,6 +235,11 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("sync-analyze")
     sub.add_parser("refresh")
     sub.add_parser("serve")
+    ua = sub.add_parser("user-add")
+    ua.add_argument("username")
+    ua.add_argument("--maintainer", action="store_true")
+    sub.add_parser("user-list")
+    sub.add_parser("serve-web")
     return parser
 
 
@@ -276,6 +299,32 @@ def main() -> None:
         print(f"serving: refresh every {settings.refresh_interval_seconds}s "
               "(Ctrl-C to stop)")
         asyncio.run(_serve())
+    elif args.cmd == "user-add":
+        try:
+            password = asyncio.run(_user_add(args.username, args.maintainer))
+        except ValueError as exc:
+            raise SystemExit(str(exc))
+        print(f"created user '{args.username}'"
+              f"{' (maintainer)' if args.maintainer else ''}")
+        print(f"one-time password (give to the user privately, they must change it "
+              f"on first login):\n    {password}")
+    elif args.cmd == "user-list":
+        users = asyncio.run(_user_list())
+        for u in users:
+            flags = []
+            if u.is_maintainer:
+                flags.append("maintainer")
+            if u.must_change_password:
+                flags.append("must-change-pw")
+            suffix = f"  [{', '.join(flags)}]" if flags else ""
+            print(f"{u.username}{suffix}")
+        print(f"{len(users)} user(s)")
+    elif args.cmd == "serve-web":
+        import uvicorn
+
+        from mai.web.asgi import build_app
+        print("serving web app on http://127.0.0.1:8000 (Ctrl-C to stop)")
+        uvicorn.run(build_app(), host="127.0.0.1", port=8000)
 
 
 if __name__ == "__main__":

@@ -23,6 +23,8 @@ class Settings(BaseSettings):
     git_mirror_dir: str = "./mirrors"
     refresh_interval_seconds: int = 10800
     deploy_command: str | None = None
+    session_secret: str = "dev-insecure-change-me"
+    cookie_secure: bool = True
 
 
 settings = Settings()

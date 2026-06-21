@@ -282,3 +282,15 @@ class PortCandidate(Base):
     __table_args__ = (
         UniqueConstraint("patch_group_id", "target_core", name="uq_port_candidate"),
     )
+
+
+class User(Base):
+    """An admin-provisioned login account. No self-registration."""
+    __tablename__ = "users"
+    username: Mapped[str] = mapped_column(String(64), primary_key=True)
+    password_hash: Mapped[str] = mapped_column(Text)
+    display_name: Mapped[str] = mapped_column(String(128), default="")
+    is_maintainer: Mapped[bool] = mapped_column(Boolean, default=False)
+    must_change_password: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(default=_now)
+    last_login: Mapped[datetime | None] = mapped_column(nullable=True)
