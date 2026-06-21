@@ -14,6 +14,11 @@ async def apply_action(session: AsyncSession, *, item_id: str, actor: str,
                        action: str, value: str | None = None,
                        reason: str | None = None,
                        related_pr: str | None = None):
+    """Apply a board action and return the mutated item.
+
+    The caller commits on success and must NOT commit the session if this raises
+    (a pending BoardItem may be attached).
+    """
     if action not in ACTIONS:
         raise ValueError(f"unknown action: {action}")
 
@@ -24,6 +29,8 @@ async def apply_action(session: AsyncSession, *, item_id: str, actor: str,
     if action == "claim":
         if item.assignee and item.assignee != actor:
             raise ClaimConflict(item.assignee)
+        if item.assignee == actor:          # already claimed by same user — true no-op
+            return item
         from_, item.assignee, item.status = item.assignee, actor, "claimed"
         await events.append(item_id, actor, "claim", from_, actor)
 

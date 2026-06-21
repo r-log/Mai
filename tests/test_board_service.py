@@ -26,6 +26,8 @@ async def test_reclaim_by_same_user_is_noop_ok(session):
     item = await apply_action(session, item_id="pg1:three", actor="antz", action="claim")
     await session.commit()
     assert item.assignee == "antz"
+    events = await BoardEventRepository(session).for_item("pg1:three")
+    assert len(events) == 1   # only the first claim recorded; re-claim is a no-op
 
 
 async def test_assign_sets_other_user(session):
@@ -80,3 +82,8 @@ async def test_dismiss_requires_reason_then_restore(session):
 async def test_unknown_action_raises(session):
     with pytest.raises(ValueError):
         await apply_action(session, item_id="pg1:three", actor="antz", action="frobnicate")
+
+
+async def test_assign_without_value_raises(session):
+    with pytest.raises(ValueError):
+        await apply_action(session, item_id="pg1:three", actor="r-log", action="assign")
