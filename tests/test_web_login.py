@@ -111,3 +111,33 @@ def test_home_html_escapes_username():
     page = _home_html("<b>hi</b>")
     assert "<b>hi</b>" not in page
     assert "&lt;b&gt;" in page
+
+
+async def test_must_change_user_is_confined_to_set_password(client_and_pw):
+    ac, pw = client_and_pw
+    await ac.post("/login", data={"username": "antz", "password": pw})
+    # gate bounces any other route back to /set-password
+    r = await ac.get("/")
+    assert r.status_code == 303
+    assert r.headers["location"] == "/set-password"
+    sp = await ac.get("/set-password")
+    assert sp.status_code == 200
+    assert "new password" in sp.text.lower()
+
+
+async def test_set_password_rejects_short(client_and_pw):
+    ac, pw = client_and_pw
+    await ac.post("/login", data={"username": "antz", "password": pw})
+    r = await ac.post("/set-password", data={"new_password": "short"})
+    assert r.status_code == 400
+
+
+async def test_set_password_clears_flag_and_unlocks_board(client_and_pw):
+    ac, pw = client_and_pw
+    await ac.post("/login", data={"username": "antz", "password": pw})
+    r = await ac.post("/set-password", data={"new_password": "a-good-long-password"})
+    assert r.status_code == 303
+    assert r.headers["location"] == "/"
+    home = await ac.get("/")
+    assert home.status_code == 200
+    assert "signed in as antz" in home.text

@@ -16,13 +16,23 @@ def _page(title: str, body: str) -> str:
 
 
 def _login_html(error: str = "") -> str:
-    err = f"<p class='error'>{error}</p>" if error else ""
+    err = f"<p class='error'>{html.escape(error)}</p>" if error else ""
     return _page("Mai — Login", f"""
         <h1>Mai</h1>{err}
         <form method='post' action='/login'>
           <input name='username' placeholder='username' autofocus>
           <input name='password' type='password' placeholder='password'>
           <button type='submit'>Log in</button>
+        </form>""")
+
+
+def _set_password_html(error: str = "") -> str:
+    err = f"<p class='error'>{html.escape(error)}</p>" if error else ""
+    return _page("Mai — Set password", f"""
+        <h1>Set your password</h1>{err}
+        <form method='post' action='/set-password'>
+          <input name='new_password' type='password' placeholder='new password' autofocus>
+          <button type='submit'>Save</button>
         </form>""")
 
 
@@ -79,6 +89,25 @@ def create_app(session_factory, hasher, session_secret: str, *,
     async def logout(request: Request):
         request.session.clear()
         return RedirectResponse("/login", status_code=303)
+
+    @app.get("/set-password", response_class=HTMLResponse)
+    async def set_password_form(request: Request) -> str:
+        return _set_password_html()
+
+    @app.post("/set-password")
+    async def set_password(request: Request, new_password: str = Form(...)):
+        if len(new_password) < 8:
+            return HTMLResponse(
+                _set_password_html("Password must be at least 8 characters"),
+                status_code=400)
+        username = request.session["username"]
+        async with session_factory() as db:
+            repo = UserRepository(db)
+            user = await repo.get(username)
+            await repo.set_password(user, hasher.hash(new_password))
+            await db.commit()
+        request.session["must_change"] = False
+        return RedirectResponse("/", status_code=303)
 
     @app.get("/", response_class=HTMLResponse)
     async def home(request: Request) -> str:
