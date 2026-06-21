@@ -323,8 +323,15 @@ def main() -> None:
         import uvicorn
 
         from mai.web.asgi import build_app
-        print("serving web app on http://127.0.0.1:8000 (Ctrl-C to stop)")
-        uvicorn.run(build_app(), host="127.0.0.1", port=8000)
+        if settings.cookie_secure and settings.session_secret == "dev-insecure-change-me":
+            raise SystemExit(
+                "refusing to serve with the default SESSION_SECRET while "
+                "COOKIE_SECURE is on.\nSet a real SESSION_SECRET in .env for "
+                "production, or COOKIE_SECURE=false for local http dev.")
+        print(f"serving web app on {settings.web_host}:{settings.web_port} "
+              "(Ctrl-C to stop)")
+        uvicorn.run(build_app(), host=settings.web_host, port=settings.web_port,
+                    proxy_headers=True, forwarded_allow_ips=settings.forwarded_allow_ips)
 
 
 if __name__ == "__main__":

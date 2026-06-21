@@ -1,0 +1,9 @@
+# Mai reverse proxy. Replace mai.example.org with your real domain/subdomain.
+# Caddy auto-provisions and renews a Let's Encrypt TLS cert and sets
+# X-Forwarded-Proto=https, which uvicorn (proxy_headers) trusts so the secure
+# session cookie is issued. uvicorn listens only on 127.0.0.1 — Caddy is the
+# only process facing the internet.
+mai.example.org {
+    encode zstd gzip
+    reverse_proxy 127.0.0.1:8000
+}

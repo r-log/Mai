@@ -25,6 +25,9 @@ class Settings(BaseSettings):
     deploy_command: str | None = None
     session_secret: str = "dev-insecure-change-me"
     cookie_secure: bool = True
+    web_host: str = "127.0.0.1"
+    web_port: int = 8000
+    forwarded_allow_ips: str = "127.0.0.1"
 
 
 settings = Settings()

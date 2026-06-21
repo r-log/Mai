@@ -1,0 +1,22 @@
+[Unit]
+Description=Mai cross-fork port-debt board
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=mai
+Group=mai
+WorkingDirectory=/opt/mai
+EnvironmentFile=/opt/mai/.env
+ExecStart=/opt/mai/.venv/bin/python -m mai.cli serve-web
+Restart=on-failure
+RestartSec=5
+# hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target
