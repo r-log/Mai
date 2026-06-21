@@ -12,4 +12,5 @@ mai-data/resources/
 .superpowers/
 .env
 mai-data/tmp/
+mirrors/
 .python-version
