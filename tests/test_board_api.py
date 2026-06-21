@@ -89,7 +89,7 @@ async def test_csrf_required_for_mutation(env):
     assert r.status_code == 403
 
 
-async def test_non_maintainer_cannot_assign_or_dismiss(env):
+async def test_non_maintainer_cannot_assign_dismiss_or_restore(env):
     ac, _, pws = env
     await _login(ac, "dev", pws["dev"])
     token = await _csrf(ac)
@@ -99,6 +99,8 @@ async def test_non_maintainer_cannot_assign_or_dismiss(env):
     r2 = await ac.post("/api/board/pgA:three/dismiss",
                        json={"reason": "no", "csrf": token})
     assert r2.status_code == 403
+    r3 = await ac.post("/api/board/pgA:three/restore", json={"csrf": token})
+    assert r3.status_code == 403
 
 
 async def test_maintainer_can_assign(env):

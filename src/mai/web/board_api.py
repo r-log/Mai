@@ -24,6 +24,9 @@ def _overlay(item) -> dict:
             "dismiss_reason": item.dismiss_reason}
 
 
+_MAINTAINER_ONLY = frozenset({"assign", "dismiss", "restore"})
+
+
 def make_board_router(session_factory) -> APIRouter:
     router = APIRouter(prefix="/api/board")
 
@@ -53,14 +56,14 @@ def make_board_router(session_factory) -> APIRouter:
                        "is_maintainer": bool(user and user.is_maintainer)}
         return board
 
-    _MAINTAINER_ONLY = {"assign", "dismiss", "restore"}
-
     @router.post("/{item_id}/{action}")
     async def mutate(request: Request, item_id: str, action: str):
         body = await request.json() if await request.body() else {}
         if not body.get("csrf") or body["csrf"] != request.session.get("csrf"):
             raise HTTPException(status_code=403, detail="bad csrf")
-        username = request.session["username"]
+        username = request.session.get("username")
+        if not username:
+            raise HTTPException(status_code=401, detail="not authenticated")
         async with session_factory() as session:
             user = await UserRepository(session).get(username)
             is_maintainer = bool(user and user.is_maintainer)
