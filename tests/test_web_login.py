@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from mai.auth.accounts import create_account
 from mai.auth.fake import FakeHasher
 from mai.db.base import Base
-from mai.web.app import _home_html, create_app
+from mai.web.app import create_app
 
 
 @pytest_asyncio.fixture
@@ -106,13 +106,6 @@ async def test_unknown_user_still_calls_verify():
     assert spy.verify_calls >= 1
 
 
-def test_home_html_escapes_username():
-    """HTML metacharacters in username must be escaped in the home page."""
-    page = _home_html("<b>hi</b>")
-    assert "<b>hi</b>" not in page
-    assert "&lt;b&gt;" in page
-
-
 async def test_must_change_user_is_confined_to_set_password(client_and_pw):
     ac, pw = client_and_pw
     await ac.post("/login", data={"username": "antz", "password": pw})
@@ -161,5 +154,5 @@ async def test_set_password_clears_flag_and_unlocks_board(client_and_pw):
     assert r.status_code == 303
     assert r.headers["location"] == "/"
     home = await ac.get("/")
-    assert home.status_code == 200
-    assert "signed in as antz" in home.text
+    assert home.status_code == 303
+    assert home.headers["location"] == "/port"

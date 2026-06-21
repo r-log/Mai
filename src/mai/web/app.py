@@ -1,9 +1,11 @@
 import html
 import secrets
 from datetime import datetime, timezone
+from pathlib import Path
 
 from fastapi import FastAPI, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
 from mai.repository.users import UserRepository
@@ -37,11 +39,35 @@ def _set_password_html(error: str = "") -> str:
         </form>""")
 
 
-def _home_html(username: str) -> str:
-    safe = html.escape(username)
-    return _page("Mai", f"<p>signed in as {safe}</p>"
-                        "<form method='post' action='/logout'>"
-                        "<button>Log out</button></form>")
+def _port_html(username: str, is_maintainer: bool) -> str:
+    role = "maintainer" if is_maintainer else "member"
+    return _page("Mai — Port Debt", f"""
+        <link rel="stylesheet" href="/static/board.css">
+        <header class="port-head">
+          <h1>Port Debt</h1>
+          <span id="port-summary" class="port-summary"></span>
+          <span id="port-fresh" class="port-fresh"></span>
+          <span class="port-me">{html.escape(username)} · {role}
+            <a href="/logout" onclick="event.preventDefault();
+               fetch('/logout',{{method:'POST'}}).then(()=>location='/login')">log out</a>
+          </span>
+        </header>
+        <nav id="port-views" class="port-views">
+          <button data-view="all" class="on">All cores</button>
+          <button data-view="mine">My ports</button>
+          <button data-view="person">By person</button>
+        </nav>
+        <div id="port-filters" class="port-filters">
+          <select id="f-tier"><option value="">all tiers</option>
+            <option>surgical</option><option>small</option>
+            <option>moderate</option><option>bulk</option></select>
+          <select id="f-source"><option value="">all sources</option></select>
+          <select id="f-subsystem"><option value="">all subsystems</option></select>
+          <input id="f-search" placeholder="search title/subsystem">
+          <label><input type="checkbox" id="f-dismissed"> show dismissed</label>
+        </div>
+        <div id="port-board" class="port-board"></div>
+        <script src="/static/portboard.js"></script>""")
 
 
 def create_app(session_factory, hasher, session_secret: str, *,
@@ -110,9 +136,19 @@ def create_app(session_factory, hasher, session_secret: str, *,
         request.session["must_change"] = False
         return RedirectResponse("/", status_code=303)
 
-    @app.get("/", response_class=HTMLResponse)
-    async def home(request: Request) -> str:
-        return _home_html(request.session.get("username") or "")
+    @app.get("/")
+    async def home():
+        return RedirectResponse("/port", status_code=303)
+
+    @app.get("/port", response_class=HTMLResponse)
+    async def port(request: Request):
+        username = request.session["username"]
+        async with session_factory() as session:
+            user = await UserRepository(session).get(username)
+        return _port_html(username, bool(user and user.is_maintainer))
 
     app.include_router(make_board_router(session_factory))
+    app.mount("/static",
+              StaticFiles(directory=Path(__file__).parent / "static"),
+              name="static")
     return app
