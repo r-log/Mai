@@ -22,7 +22,7 @@ def _login_html(error: str = "") -> str:
     err = f"<div class='auth-error'>{html.escape(error)}</div>" if error else ""
     return _page("Mai — Login", f"""
         <link rel="stylesheet" href="/static/auth.css">
-        <div class="auth-card">
+        <div class="auth-wrap">
           <div class="auth-logo">
             <img src="/static/mangos-logo.png" alt="MaNGOS">
           </div>
@@ -30,12 +30,10 @@ def _login_html(error: str = "") -> str:
             {err}
             <form method="post" action="/login">
               <div class="auth-field">
-                <label for="username">Username</label>
                 <input id="username" name="username" placeholder="username"
                        autocomplete="username" autofocus>
               </div>
               <div class="auth-field">
-                <label for="password">Password</label>
                 <input id="password" name="password" type="password"
                        placeholder="password" autocomplete="current-password">
               </div>
@@ -49,7 +47,7 @@ def _set_password_html(error: str = "") -> str:
     err = f"<div class='auth-error'>{html.escape(error)}</div>" if error else ""
     return _page("Mai — Set password", f"""
         <link rel="stylesheet" href="/static/auth.css">
-        <div class="auth-card">
+        <div class="auth-wrap">
           <div class="auth-logo">
             <img src="/static/mangos-logo.png" alt="MaNGOS">
           </div>
@@ -58,7 +56,6 @@ def _set_password_html(error: str = "") -> str:
             {err}
             <form method="post" action="/set-password">
               <div class="auth-field">
-                <label for="new_password">New password</label>
                 <input id="new_password" name="new_password" type="password"
                        placeholder="new password" autocomplete="new-password" autofocus>
               </div>

@@ -12,33 +12,10 @@ body {
   background: linear-gradient(135deg, #000 0%, #1a1a1a 50%, #2d2d2d 100%);
   overflow-x: hidden;
 }
-body::before {
-  content: "";
-  position: fixed;
-  inset: -100px;
-  pointer-events: none;
-  z-index: -1;
-  background:
-    radial-gradient(circle at 20% 80%, rgba(255, 215, 0, 0.10) 0%, transparent 50%),
-    radial-gradient(circle at 80% 20%, rgba(255, 215, 0, 0.08) 0%, transparent 50%),
-    radial-gradient(circle at 40% 40%, rgba(255, 215, 0, 0.05) 0%, transparent 50%);
-  animation: float 20s ease-in-out infinite;
-}
-@keyframes float {
-  0%, 100% { transform: translateY(0) rotate(0deg); }
-  33% { transform: translateY(-30px) rotate(1deg); }
-  66% { transform: translateY(15px) rotate(-1deg); }
-}
 
-.auth-card {
+.auth-wrap {
   width: 100%;
-  max-width: 420px;
-  border-radius: 18px;
-  padding: 26px;
-  backdrop-filter: blur(15px);
-  background: rgba(255, 215, 0, 0.10);
-  border: 2px solid rgba(255, 215, 0, 0.30);
-  box-shadow: 0 20px 40px rgba(255, 215, 0, 0.20), 0 0 80px rgba(255, 215, 0, 0.10);
+  max-width: 480px;
   animation: fadeIn 0.5s ease-in;
 }
 @keyframes fadeIn {
@@ -46,14 +23,22 @@ body::before {
   to { opacity: 1; transform: translateY(0); }
 }
 
-.auth-logo { display: flex; justify-content: center; margin-bottom: 20px; }
+.auth-logo {
+  position: fixed;
+  top: 28px;
+  left: 50%;
+  transform: translateX(-50%);
+}
 .auth-logo img {
-  height: 96px;
+  height: 260px;
+  max-width: 100%;
   width: auto;
-  filter: drop-shadow(0 6px 18px rgba(255, 215, 0, 0.35));
+  filter: drop-shadow(0 8px 22px rgba(0, 0, 0, 0.45));
 }
 
 .auth-form {
+  max-width: 300px;
+  margin: 0 auto;
   background: rgba(0, 0, 0, 0.9);
   backdrop-filter: blur(20px);
   border: 1px solid rgba(255, 215, 0, 0.30);
@@ -72,6 +57,7 @@ body::before {
 .auth-field { margin-bottom: 16px; }
 .auth-field label {
   display: block;
+  text-align: center;
   font-size: 13px;
   font-weight: 600;
   margin: 0 0 6px;
@@ -82,6 +68,7 @@ body::before {
   padding: 11px 14px;
   border-radius: 9px;
   font-size: 14px;
+  text-align: center;
   color: #000;
   background: rgba(255, 255, 255, 0.95);
   border: 1px solid rgba(255, 215, 0, 0.30);
@@ -96,8 +83,11 @@ body::before {
 }
 
 .auth-btn {
-  width: 100%;
-  padding: 12px 16px;
+  display: block;
+  width: fit-content;
+  min-width: 150px;
+  margin: 6px auto 0;
+  padding: 11px 30px;
   border: none;
   border-radius: 9px;
   font-size: 15px;
