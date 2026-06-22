@@ -324,3 +324,28 @@ class BoardEvent(Base):
     __table_args__ = (
         UniqueConstraint("port_candidate_id", "seq", name="uq_board_event_seq"),
     )
+
+
+class PortVerdict(Base):
+    """Derived per-(fix, core) verdict: does this core need this fix? Recomputable."""
+    __tablename__ = "port_verdict"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    patch_group_id: Mapped[str] = mapped_column(ForeignKey("patch_group.id"))
+    core: Mapped[str] = mapped_column(String(64))
+    verdict: Mapped[str] = mapped_column(String(16))        # needs|review|not_applicable|has_it
+    apply_result: Mapped[str] = mapped_column(String(16))   # clean|reverse_clean|conflict|file_absent
+    relevance: Mapped[str] = mapped_column(String(16))      # portable|divergent
+    source_core: Mapped[str] = mapped_column(String(64))
+    source_sha: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    base_sha: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    subsystem: Mapped[str] = mapped_column(String(255))
+    magnitude: Mapped[int] = mapped_column(Integer, default=0)
+    tier: Mapped[str] = mapped_column(String(16), default="surgical")
+    confidence: Mapped[str] = mapped_column(String(16), default="high")
+    similar_commit: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    evidence: Mapped[list] = mapped_column(JSON, default=list)
+    computed_at: Mapped[datetime] = mapped_column(default=_now, onupdate=_now)
+
+    __table_args__ = (
+        UniqueConstraint("patch_group_id", "core", name="uq_port_verdict"),
+    )

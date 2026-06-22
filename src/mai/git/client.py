@@ -18,6 +18,7 @@ class GitClient(Protocol):
     async def ensure_worktree(self, core: str) -> str: ...
     async def apply_check(self, core: str, patch_text: str, *,
                           reverse: bool = False) -> str: ...
+    async def head_sha(self, core: str) -> str: ...
 
 
 class LocalGitClient:
@@ -171,3 +172,6 @@ class LocalGitClient:
         if "no such file" in low or "does not exist" in low:
             return "file_absent"
         return "conflict"
+
+    async def head_sha(self, core: str) -> str:
+        return (await self._git(core, "rev-parse", "HEAD")).strip()
