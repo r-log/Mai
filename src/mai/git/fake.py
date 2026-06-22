@@ -34,3 +34,13 @@ class FakeGitClient:
     async def paths_exist(self, core: str, paths: list[str]) -> dict[str, bool]:
         have = set(self._paths.get(core, []))
         return {p: p in have for p in paths}
+
+    async def ensure_worktree(self, core: str) -> str:
+        return f"/fake/worktrees/{core}"
+
+    async def apply_check(self, core: str, patch_text: str, *,
+                          reverse: bool = False) -> str:
+        key = (core, patch_text, reverse)
+        if key in self._apply:
+            return self._apply[key]
+        return "conflict" if reverse else "clean"

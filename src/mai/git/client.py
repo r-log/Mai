@@ -15,13 +15,18 @@ class GitClient(Protocol):
     async def new_commits(self, core: str, since_sha: str | None) -> list[CommitMeta]: ...
     async def diff(self, core: str, sha: str) -> str: ...
     async def paths_exist(self, core: str, paths: list[str]) -> dict[str, bool]: ...
+    async def ensure_worktree(self, core: str) -> str: ...
+    async def apply_check(self, core: str, patch_text: str, *,
+                          reverse: bool = False) -> str: ...
 
 
 class LocalGitClient:
     """Production GitClient: async subprocess over bare `--mirror` clones under mirror_dir."""
 
-    def __init__(self, mirror_dir: str):
+    def __init__(self, mirror_dir: str, worktree_dir: str | None = None):
         self._root = Path(mirror_dir)
+        self._wt_root = (Path(worktree_dir) if worktree_dir
+                         else self._root.parent / "worktrees")
 
     def _path(self, core: str) -> Path:
         return self._root / f"{core}.git"
@@ -127,3 +132,41 @@ class LocalGitClient:
                 ["-C", str(self._path(core)), "cat-file", "-e", f"HEAD:{p}"])
             result[p] = rc == 0
         return result
+
+    async def ensure_worktree(self, core: str) -> str:
+        """A working tree of the bare mirror checked out at HEAD (reset on refresh).
+
+        Returns the worktree path. The bare mirror shares its object store with the
+        worktree, so after a fetch the new objects are present and the worktree is
+        reset to the mirror's current HEAD.
+        """
+        head = (await self._git(core, "rev-parse", "HEAD")).strip()
+        wt = self._wt_root / core
+        if (wt / ".git").exists():
+            await self._run(["-C", str(wt), "reset", "--hard", head])
+            await self._run(["-C", str(wt), "clean", "-fdq"])
+        else:
+            wt.parent.mkdir(parents=True, exist_ok=True)
+            await self._git(core, "worktree", "add", "--detach", "--force",
+                            str(wt), head)
+        return str(wt)
+
+    async def apply_check(self, core: str, patch_text: str, *,
+                          reverse: bool = False) -> str:
+        """Grade `git apply --check` of a patch against the core's worktree.
+
+        Returns 'clean' | 'reverse_clean' | 'conflict' | 'file_absent'. Never raises
+        on a non-applying patch — the result is the signal.
+        """
+        wt = await self.ensure_worktree(core)
+        args = ["-C", wt, "apply", "--check"]
+        if reverse:
+            args.append("--reverse")
+        args.append("-")
+        rc, _, err = await self._run_raw(args, stdin=patch_text.encode("utf-8", "replace"))
+        if rc == 0:
+            return "reverse_clean" if reverse else "clean"
+        low = err.lower()
+        if "no such file" in low or "does not exist" in low:
+            return "file_absent"
+        return "conflict"
