@@ -1,7 +1,9 @@
+from collections import defaultdict
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from mai.db.models import CommitFile
+from mai.db.models import CommitFile, DriftObservation
 from mai.repository.subsystem_class import SubsystemClassRepository
 
 # Conservative subsystem classifier. Rules seeded from workspace CLAUDE.md:
@@ -54,6 +56,34 @@ def classify_subsystem(subsystem: str) -> str:
     return "mixed"
 
 
+async def seed_client_bound_from_drift(session) -> int:
+    """Upgrade fully-diverged 'mixed' subsystems to 'client_bound' (source 'drift').
+
+    A subsystem is 'fully diverged' when every drift observation of it has
+    identical == 0 and diverged > 0 (nothing matches across any fork pair) — the
+    fingerprint of client/protocol-bound code (e.g. WorldHandlers/Server). Only
+    upgrades subsystems the path heuristic left 'mixed'; never overrides a confident
+    path class or a manual_override.
+    """
+    obs = list(await session.scalars(select(DriftObservation)))
+    by_sub: dict[str, list[DriftObservation]] = defaultdict(list)
+    for o in obs:
+        by_sub[o.subsystem].append(o)
+
+    repo = SubsystemClassRepository(session)
+    seeded = 0
+    for sub, rows in by_sub.items():
+        if not all(r.identical == 0 and r.diverged > 0 for r in rows):
+            continue
+        current = await repo.get(sub)
+        if current is None or current.classification != "mixed":
+            continue  # only upgrade an unknown ('mixed') auto classification
+        if await repo.upsert_auto(sub, "client_bound", source="drift"):
+            seeded += 1
+    await session.commit()
+    return seeded
+
+
 async def classify_subsystems(session: AsyncSession) -> dict:
     """Classify every distinct harvested subsystem, preserving manual overrides.
 
@@ -78,4 +108,6 @@ async def classify_subsystems(session: AsyncSession) -> dict:
             counts[kept.classification] = counts.get(kept.classification, 0) + 1
         counts["total"] += 1
     await session.commit()
+    drift_seeded = await seed_client_bound_from_drift(session)
+    counts["client_bound_from_drift"] = drift_seeded
     return counts

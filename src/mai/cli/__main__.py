@@ -284,8 +284,9 @@ def main() -> None:
         t = pc["tiers"]
         print(f"sync-analyze: groups={p['groups']} present={p['present']} "
               f"absent={p['absent']} cherry_links={p['cherry_links']} | "
-              f"subsystems={c['total']} shared={c['shared']} expansion={c['expansion']} "
-              f"mixed={c['mixed']} vendored={c['vendored']} | "
+              f"subsystems={c['total']} shared={c['shared']} "
+              f"client_bound={c['client_bound']}(+{c.get('client_bound_from_drift', 0)} drift) "
+              f"expansion={c['expansion']} mixed={c['mixed']} vendored={c['vendored']} | "
               f"port_candidates={pc['candidates']} "
               f"(surgical={t['surgical']} small={t['small']} moderate={t['moderate']} "
               f"bulk={t['bulk']}) skipped={pc['skipped_unportable']} "
