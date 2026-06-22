@@ -21,22 +21,35 @@ EXPANSION_SEGMENTS = frozenset({
     "reputation", "scripts",
 })
 
+# Client/protocol-bound: byte layouts differ per WoW client build (15595 vs 12340 ...),
+# so these are divergent-by-design and never cross-portable, even when text merges.
+# NOTE: 'server' is intentionally absent — 'src/game/Server' stays 'mixed' via paths and
+# is upgraded to client_bound only when the drift signal proves it fully diverged.
+CLIENT_BOUND_SEGMENTS = frozenset({
+    "worldhandlers", "opcode", "opcodes", "packet", "packets",
+    "protocol", "smsg", "cmsg", "authsocket", "worldsocket",
+})
+
 
 def classify_subsystem(subsystem: str) -> str:
-    """Return 'vendored' | 'shared' | 'expansion' | 'mixed' for a subsystem path (depth-3 dir).
+    """Return 'vendored' | 'client_bound' | 'shared' | 'expansion' | 'mixed' for a subsystem path (depth-3 dir).
 
-    Conservative by design: 'vendored' for third-party deps, 'shared' only for
-    infrastructure prefixes, 'expansion' only when a path segment names
+    Conservative by design: 'vendored' for third-party deps, 'client_bound' for
+    protocol/packet paths (divergent-by-design per client build), 'shared' only
+    for infrastructure prefixes, 'expansion' only when a path segment names
     version-bound content, else 'mixed'.
     """
     s = subsystem.lower()
     for prefix in VENDORED_PREFIXES:
         if s == prefix or s.startswith(prefix + "/"):
             return "vendored"
+    segments = s.split("/")
+    if any(seg in CLIENT_BOUND_SEGMENTS for seg in segments):
+        return "client_bound"
     for prefix in SHARED_PREFIXES:
         if s == prefix or s.startswith(prefix + "/"):
             return "shared"
-    if any(seg in EXPANSION_SEGMENTS for seg in s.split("/")):
+    if any(seg in EXPANSION_SEGMENTS for seg in segments):
         return "expansion"
     return "mixed"
 
@@ -53,7 +66,7 @@ async def classify_subsystems(session: AsyncSession) -> dict:
     )
     repo = SubsystemClassRepository(session)
     counts = {"total": 0, "shared": 0, "expansion": 0, "mixed": 0,
-              "vendored": 0, "manual_preserved": 0}
+              "vendored": 0, "client_bound": 0, "manual_preserved": 0}
     for subsystem in subsystems:
         auto = classify_subsystem(subsystem)
         wrote = await repo.upsert_auto(subsystem, auto)

@@ -58,3 +58,26 @@ def test_case_insensitive():
 def test_dep_prefix_not_confused_by_substring():
     # a path that merely starts with the letters "dep" but isn't the dep/ tree
     assert classify_subsystem("src/game/Dependencies") == "mixed"
+
+
+@pytest.mark.parametrize("subsystem", [
+    "src/game/Server/WorldHandlers",
+    "src/game/Opcodes",
+    "src/shared/Packets",          # client-bound beats shared
+    "src/realmd/AuthSocket",       # client-bound beats shared
+    "src/game/Server/Protocol",
+])
+def test_client_bound(subsystem):
+    assert classify_subsystem(subsystem) == "client_bound"
+
+
+def test_client_bound_beats_shared_and_expansion():
+    # a packet-layout file under a shared prefix is client-bound, not shared
+    assert classify_subsystem("src/shared/SMSG") == "client_bound"
+    # vendored still wins over client_bound
+    assert classify_subsystem("dep/foo/packets") == "vendored"
+
+
+def test_server_dir_itself_stays_mixed():
+    # 'server' alone is NOT a client-bound segment; the drift signal upgrades it
+    assert classify_subsystem("src/game/Server") == "mixed"
