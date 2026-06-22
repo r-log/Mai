@@ -19,24 +19,55 @@ def _page(title: str, body: str) -> str:
 
 
 def _login_html(error: str = "") -> str:
-    err = f"<p class='error'>{html.escape(error)}</p>" if error else ""
+    err = f"<div class='auth-error'>{html.escape(error)}</div>" if error else ""
     return _page("Mai — Login", f"""
-        <h1>Mai</h1>{err}
-        <form method='post' action='/login'>
-          <input name='username' placeholder='username' autofocus>
-          <input name='password' type='password' placeholder='password'>
-          <button type='submit'>Log in</button>
-        </form>""")
+        <link rel="stylesheet" href="/static/auth.css">
+        <div class="auth-card">
+          <div class="auth-logo">
+            <img src="/static/mangos-logo.png" alt="MaNGOS">
+          </div>
+          <div class="auth-form">
+            {err}
+            <form method="post" action="/login">
+              <div class="auth-field">
+                <label for="username">Username</label>
+                <input id="username" name="username" placeholder="username"
+                       autocomplete="username" autofocus>
+              </div>
+              <div class="auth-field">
+                <label for="password">Password</label>
+                <input id="password" name="password" type="password"
+                       placeholder="password" autocomplete="current-password">
+              </div>
+              <button class="auth-btn" type="submit">Sign in</button>
+            </form>
+          </div>
+        </div>""")
 
 
 def _set_password_html(error: str = "") -> str:
-    err = f"<p class='error'>{html.escape(error)}</p>" if error else ""
+    err = f"<div class='auth-error'>{html.escape(error)}</div>" if error else ""
     return _page("Mai — Set password", f"""
-        <h1>Set your password</h1>{err}
-        <form method='post' action='/set-password'>
-          <input name='new_password' type='password' placeholder='new password' autofocus>
-          <button type='submit'>Save</button>
-        </form>""")
+        <link rel="stylesheet" href="/static/auth.css">
+        <div class="auth-card">
+          <div class="auth-logo">
+            <img src="/static/mangos-logo.png" alt="MaNGOS">
+          </div>
+          <div class="auth-form">
+            <h1>Set your password</h1>
+            {err}
+            <form method="post" action="/set-password">
+              <div class="auth-field">
+                <label for="new_password">New password</label>
+                <input id="new_password" name="new_password" type="password"
+                       placeholder="new password" autocomplete="new-password" autofocus>
+              </div>
+              <button class="auth-btn" type="submit">Save</button>
+            </form>
+            <p class="auth-hint">Choose at least 8 characters. This replaces the
+               one-time password you were given.</p>
+          </div>
+        </div>""")
 
 
 def _port_html(username: str, is_maintainer: bool) -> str:
