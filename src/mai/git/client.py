@@ -13,6 +13,8 @@ class GitClient(Protocol):
     async def ensure_mirror(self, core: str, url: str) -> None: ...
     async def fetch(self, core: str) -> None: ...
     async def new_commits(self, core: str, since_sha: str | None) -> list[CommitMeta]: ...
+    async def diff(self, core: str, sha: str) -> str: ...
+    async def paths_exist(self, core: str, paths: list[str]) -> dict[str, bool]: ...
 
 
 class LocalGitClient:
@@ -24,18 +26,22 @@ class LocalGitClient:
     def _path(self, core: str) -> Path:
         return self._root / f"{core}.git"
 
-    async def _run(self, args: list[str], *, cwd: str | None = None,
-                   stdin: bytes | None = None) -> str:
+    async def _run_raw(self, args: list[str], *,
+                       stdin: bytes | None = None) -> tuple[int, str, str]:
         proc = await asyncio.create_subprocess_exec(
-            "git", *args, cwd=cwd,
+            "git", *args, cwd=None,
             stdin=asyncio.subprocess.PIPE if stdin is not None else None,
             stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
         )
         out, err = await proc.communicate(input=stdin)
-        if proc.returncode != 0:
-            raise GitError(f"git {' '.join(args)} -> {proc.returncode}: "
-                           f"{err.decode('utf-8', 'replace').strip()}")
-        return out.decode("utf-8", "replace")
+        return (proc.returncode, out.decode("utf-8", "replace"),
+                err.decode("utf-8", "replace"))
+
+    async def _run(self, args: list[str], *, stdin: bytes | None = None) -> str:
+        rc, out, err = await self._run_raw(args, stdin=stdin)
+        if rc != 0:
+            raise GitError(f"git {' '.join(args)} -> {rc}: {err.strip()}")
+        return out
 
     async def _git(self, core: str, *args: str, stdin: bytes | None = None) -> str:
         return await self._run(["-C", str(self._path(core)), *args], stdin=stdin)
@@ -108,3 +114,16 @@ class LocalGitClient:
             files.append(CommitFileMeta(path=path, change_type=change,
                                         old_path=old_path, added=added, removed=removed))
         return files
+
+    async def diff(self, core: str, sha: str) -> str:
+        """The commit's unified patch (same diff that feeds patch-id)."""
+        return await self._git(core, "diff-tree", "--root", "-p", "-M", sha)
+
+    async def paths_exist(self, core: str, paths: list[str]) -> dict[str, bool]:
+        """Whether each path exists in the core's HEAD tree."""
+        result: dict[str, bool] = {}
+        for p in paths:
+            rc, _, _ = await self._run_raw(
+                ["-C", str(self._path(core)), "cat-file", "-e", f"HEAD:{p}"])
+            result[p] = rc == 0
+        return result
