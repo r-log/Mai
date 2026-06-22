@@ -13,4 +13,5 @@ mai-data/resources/
 .env
 mai-data/tmp/
 mirrors/
+worktrees/
 .python-version
