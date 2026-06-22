@@ -107,3 +107,25 @@ async def test_incremental_cache_skips_unchanged(session):
     second = await compute_verdicts(session, fake)   # nothing changed
     assert first["recomputed"] >= 1
     assert second["cached"] >= 1 and second["recomputed"] == 0
+
+
+async def test_two_fixes_do_not_cross_contaminate(session):
+    # pgA: shared subsystem -> should be NEEDS (portable + clean apply)
+    await _fix(session, pg_id="pgA", source_core="three", source_sha="sA",
+               subsystem="src/shared/X", classification="shared",
+               present_cores=["three"], absent_cores=["two"])
+    # pgB: client_bound subsystem -> should be REVIEW (divergent even with clean apply)
+    await _fix(session, pg_id="pgB", source_core="three", source_sha="sB",
+               subsystem="src/game/Server/Opcodes", classification="client_bound",
+               present_cores=["three"], absent_cores=["two"])
+    await session.commit()
+    fake = FakeGitClient(
+        diffs={("three", "sA"): "PA", ("three", "sB"): "PB"},
+        paths={"two": ["src/shared/X/x.cpp", "src/game/Server/Opcodes/x.cpp"]})
+    await compute_verdicts(session, fake)
+    repo = PortVerdictRepository(session)
+    assert (await repo.get("pgA", "two")).verdict == "needs"
+    assert (await repo.get("pgB", "two")).verdict == "review"
+    # each fix must have exactly one verdict — no contamination from the other's propagation
+    assert len(await repo.for_fix("pgA")) == 1
+    assert len(await repo.for_fix("pgB")) == 1

@@ -3,7 +3,7 @@ from collections import defaultdict
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from mai.db.models import Commit, CommitFile, PatchGroup, Propagation
+from mai.db.models import Commit, CommitFile, Propagation
 from mai.repository.port_candidate import magnitude_tier
 from mai.repository.port_verdict import PortVerdictRepository
 from mai.repository.subsystem_class import SubsystemClassRepository
@@ -14,15 +14,14 @@ def resolve_relevance(files, classes: dict[str, str]) -> tuple[str, int, str]:
 
     portable iff EVERY touched subsystem is classified 'shared' (a patch that also
     touches client_bound/expansion/vendored/mixed code cannot be a clean cross-port).
-    magnitude = portable (shared) lines when portable, else all touched lines.
+    magnitude = all touched lines in both cases.
     Returns (relevance, magnitude, representative_subsystem).
     """
     touched = sorted({f.subsystem for f in files})
     all_shared = bool(touched) and all(classes.get(s) == "shared" for s in touched)
-    if all_shared:
-        magnitude = sum(f.added_lines + f.removed_lines for f in files)
-        return "portable", magnitude, touched[0]
     magnitude = sum(f.added_lines + f.removed_lines for f in files)
+    if all_shared:
+        return "portable", magnitude, touched[0]
     return "divergent", magnitude, (touched[0] if touched else "(root)")
 
 
@@ -32,12 +31,13 @@ async def compute_verdicts(session: AsyncSession, git_client) -> dict:
     subsystem is shared. Incremental: cached on (source_sha, base_sha). Offline DB +
     git worktrees; no network."""
     rows = (await session.execute(
-        select(PatchGroup.id, Propagation.core, Propagation.present,
-               Propagation.source_sha))).all()
+        select(Propagation.patch_group_id, Propagation.core,
+               Propagation.present, Propagation.source_sha))).all()
     groups: dict[str, dict[str, list]] = defaultdict(
         lambda: {"present": [], "absent": []})
     for r in rows:
-        groups[r.id]["present" if r.present else "absent"].append((r.core, r.source_sha))
+        groups[r.patch_group_id]["present" if r.present else "absent"].append(
+            (r.core, r.source_sha))
 
     vrepo = PortVerdictRepository(session)
     sc_repo = SubsystemClassRepository(session)
