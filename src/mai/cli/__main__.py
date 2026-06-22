@@ -130,16 +130,19 @@ async def _commits_harvest() -> int:
 
 
 async def _sync_analyze() -> dict:
+    from mai.git.client import LocalGitClient
     from mai.sync.classify import classify_subsystems
     from mai.sync.portcandidates import compute_port_candidates
     from mai.sync.propagate import compute_propagation
+    from mai.sync.verdicts import compute_verdicts
 
     async with SessionFactory() as session:
         propagation = await compute_propagation(session)
         classification = await classify_subsystems(session)
         port_candidates = await compute_port_candidates(session)
+        verdicts = await compute_verdicts(session, LocalGitClient(settings.git_mirror_dir))
         return {"propagation": propagation, "classification": classification,
-                "port_candidates": port_candidates}
+                "port_candidates": port_candidates, "verdicts": verdicts}
 
 
 async def _refresh() -> "object":
@@ -291,6 +294,10 @@ def main() -> None:
               f"(surgical={t['surgical']} small={t['small']} moderate={t['moderate']} "
               f"bulk={t['bulk']}) skipped={pc['skipped_unportable']} "
               f"resolved={pc['auto_resolved']}")
+        v = result["verdicts"]
+        print(f"verdicts: needs={v['needs']} review={v['review']} "
+              f"n/a={v['not_applicable']} has_it={v['has_it']} "
+              f"(recomputed={v['recomputed']} cached={v['cached']})")
     elif args.cmd == "refresh":
         result = asyncio.run(_refresh())
         print(f"refresh: +{result.new_commits} commits, "
