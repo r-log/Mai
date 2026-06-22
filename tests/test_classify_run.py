@@ -54,3 +54,19 @@ async def test_recompute_is_idempotent(session):
     await classify_subsystems(session)
     await classify_subsystems(session)
     assert await session.scalar(select(func.count()).select_from(SubsystemClass)) == 1
+
+
+async def test_run_reports_client_bound_and_applies_drift_seed(session):
+    from mai.db.models import DriftObservation
+    await _file(session, "src/game/Server/WorldHandlers",
+                "src/game/Server/WorldHandlers/Misc.cpp")        # path -> client_bound
+    await _file(session, "src/game/Server", "src/game/Server/WorldSocket.cpp")  # path -> mixed
+    session.add(DriftObservation(fork_a="zero", fork_b="one",
+                                 subsystem="src/game/Server", shared=5, diverged=5,
+                                 identical=0, only_a=0, only_b=0))
+    await session.commit()
+    result = await classify_subsystems(session)
+    assert result["client_bound"] >= 1                 # the WorldHandlers path
+    assert result["client_bound_from_drift"] == 1      # Server upgraded by drift
+    repo = SubsystemClassRepository(session)
+    assert (await repo.get("src/game/Server")).classification == "client_bound"
