@@ -140,6 +140,7 @@ class LocalGitClient:
         worktree, so after a fetch the new objects are present and the worktree is
         reset to the mirror's current HEAD.
         """
+        await self._git(core, "config", "core.autocrlf", "false")
         head = (await self._git(core, "rev-parse", "HEAD")).strip()
         wt = self._wt_root / core
         if (wt / ".git").exists():
