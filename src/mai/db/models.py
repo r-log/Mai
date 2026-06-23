@@ -343,6 +343,8 @@ class PortVerdict(Base):
     tier: Mapped[str] = mapped_column(String(16), default="surgical")
     confidence: Mapped[str] = mapped_column(String(16), default="high")
     similar_commit: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    conflict_applied: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    conflict_total: Mapped[int | None] = mapped_column(Integer, nullable=True)
     evidence: Mapped[list] = mapped_column(JSON, default=list)
     computed_at: Mapped[datetime] = mapped_column(default=_now, onupdate=_now)
 
