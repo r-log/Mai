@@ -20,6 +20,8 @@ class GitClient(Protocol):
     async def apply_check(self, core: str, patch_text: str, *,
                           reverse: bool = False) -> str: ...
     async def head_sha(self, core: str) -> str: ...
+    async def apply_fraction(self, core: str, patch_text: str,
+                             paths: list[str]) -> tuple[int, int]: ...
 
 
 class LocalGitClient:
@@ -191,3 +193,25 @@ class LocalGitClient:
 
     async def head_sha(self, core: str) -> str:
         return (await self._git(core, "rev-parse", "HEAD")).strip()
+
+    async def apply_fraction(self, core: str, patch_text: str,
+                             paths: list[str]) -> tuple[int, int]:
+        """How much of a (conflicting) patch applies, in hunks: (applied, total).
+
+        Runs `git apply --reject` (lands clean hunks, writes <file>.rej for the rest),
+        then counts hunk headers in the patch vs in the .rej files for `paths`.
+        total == 0 (binary / no hunks) -> (0, 0). Never raises on a non-applying patch.
+        """
+        total = sum(1 for ln in patch_text.splitlines() if ln.startswith("@@ "))
+        if total == 0:
+            return (0, 0)
+        wt = await self.ensure_worktree(core)
+        await self._run_raw(["-C", wt, "apply", "--reject", "-"],
+                            stdin=patch_text.encode("utf-8", "replace"))
+        rejected = 0
+        for p in paths:
+            rej = Path(wt) / (p + ".rej")
+            if rej.exists():
+                rejected += sum(1 for ln in rej.read_text("utf-8", "replace").splitlines()
+                                if ln.startswith("@@ "))
+        return (max(0, total - rejected), total)

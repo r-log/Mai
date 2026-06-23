@@ -8,12 +8,14 @@ class FakeGitClient:
                  diffs: dict[tuple[str, str], str] | None = None,
                  paths: dict[str, list[str]] | None = None,
                  apply_results: dict[tuple[str, str, bool], str] | None = None,
-                 head_shas: dict[str, str] | None = None):
+                 head_shas: dict[str, str] | None = None,
+                 fractions: dict[tuple[str, str], tuple[int, int]] | None = None):
         self._commits = commits or {}
         self._diffs = diffs or {}
         self._paths = paths or {}
         self._apply = apply_results or {}
         self._heads = head_shas or {}
+        self._fractions = fractions or {}
 
     async def ensure_mirror(self, core: str, url: str) -> None:
         return None
@@ -49,3 +51,7 @@ class FakeGitClient:
 
     async def head_sha(self, core: str) -> str:
         return self._heads.get(core, f"head-{core}")
+
+    async def apply_fraction(self, core: str, patch_text: str,
+                             paths: list[str]) -> tuple[int, int]:
+        return self._fractions.get((core, patch_text), (0, 1))
