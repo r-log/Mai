@@ -86,6 +86,7 @@ def _port_html(username: str, is_maintainer: bool) -> str:
           <button data-view="person">By person</button>
         </nav>
         <div id="port-filters" class="port-filters">
+          <select id="f-core"><option value="">needs porting to… (any core)</option></select>
           <select id="f-tier"><option value="">all tiers</option>
             <option>surgical</option><option>small</option>
             <option>moderate</option><option>bulk</option></select>

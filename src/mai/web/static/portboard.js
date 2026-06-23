@@ -1,227 +1,152 @@
-(function () {
-  var board = document.getElementById('port-board');
-  var summary = document.getElementById('port-summary');
-  var fresh = document.getElementById('port-fresh');
-  var TIER = { surgical:'#1a7f37', small:'#9a6700', moderate:'#bc4c00', bulk:'#cf222e' };
-  var STATUSES = ['claimed', 'in_progress', 'pr_linked'];
-  var data = null, me = null, csrf = '', view = 'all';
+let data = null, me = null, csrf = "";
+const $ = (s, r = document) => r.querySelector(s);
+const esc = (s) => (s || "").replace(/[&<>"]/g, c =>
+  ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const TIER = { surgical: "#1a7f37", small: "#9a6700", moderate: "#bc4c00", bulk: "#cf222e" };
+const BAND = { near: "#1a7f37", partial: "#9a6700", far: "#8b949e" };
 
-  function esc(s) {
-    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
-      return { '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]; });
-  }
-  function toast(msg) {
-    var t = document.createElement('div'); t.className = 'toast'; t.textContent = msg;
-    document.body.appendChild(t); setTimeout(function () { t.remove(); }, 2600);
-  }
+async function load() {
+  const r = await fetch("/api/board");
+  const j = await r.json();
+  data = j; me = j.me; csrf = j.csrf;
+  $("#port-summary").textContent =
+    `${j.summary.fixes} fixes · ${j.summary.needs} needs · ${j.summary.review} review`;
+  populateFilters();
+  render();
+}
 
-  function load() {
-    fetch('/api/board', { headers: { 'Accept': 'application/json' } })
-      .then(function (r) {
-        if (r.status === 303 || r.redirected) { location = '/login'; return null; }
-        return r.json();
-      })
-      .then(function (j) { if (!j) return; data = j; me = j.me; csrf = j.csrf;
-        renderSummary(); renderFilters(); render(); })
-      .catch(function () { toast('could not load board'); });
+function populateFilters() {
+  const fc = $("#f-core");
+  for (const c of data.cores) {
+    const o = document.createElement("option");
+    o.value = c; o.textContent = `needs porting to ${c}`;
+    fc.appendChild(o);
   }
+  const subs = [...new Set(data.fixes.map(f => f.subsystem))].sort();
+  for (const s of subs) {
+    const o = document.createElement("option"); o.value = s; o.textContent = s;
+    $("#f-subsystem").appendChild(o);
+  }
+  const srcs = [...new Set(data.fixes.map(f => f.source_core))].sort();
+  for (const s of srcs) {
+    const o = document.createElement("option"); o.value = s; o.textContent = `from ${s}`;
+    $("#f-source").appendChild(o);
+  }
+}
 
-  function renderSummary() {
-    if (summary && data.summary) {
-      var t = data.summary.tiers || {};
-      summary.textContent = (data.summary.total || 0) + ' open · surgical ' + (t.surgical || 0)
-        + ' · small ' + (t.small || 0) + ' · moderate ' + (t.moderate || 0)
-        + ' · bulk ' + (t.bulk || 0);
+function chip(entry, kind) {
+  // kind: "needs" | "review" | "na" | "has_it"
+  const ov = entry.board || {};
+  const mine = ov.assignee && ov.assignee === me.username;
+  const claimable = kind === "needs" || kind === "review";
+  const cls = ["mchip", `mchip-${kind}`];
+  if (entry.band) cls.push(`band-${entry.band}`);
+  if (ov.assignee) cls.push("claimed");
+  const label = entry.core;
+  const title = kind === "review" ? esc(entry.reason)
+    : kind === "na" ? esc(entry.reason) : "";
+  const who = ov.assignee ? `<span class="mchip-who">${esc(ov.assignee)}</span>` : "";
+  const act = claimable
+    ? `<button class="mchip-act" data-act="${ov.assignee ? (mine ? "unassign" : "assign") : "claim"}"
+        data-id="${entry.item_id}">${ov.assignee ? (mine ? "✓" : "@") : "+"}</button>`
+    : "";
+  return `<span class="${cls.join(" ")}" title="${title}">${esc(label)}${who}${act}</span>`;
+}
+
+function row(label, entries, kind) {
+  if (!entries.length) return "";
+  const far = kind === "review" ? entries.filter(e => e.band === "far") : [];
+  const near = kind === "review" ? entries.filter(e => e.band !== "far") : entries;
+  const chips = near.map(e => chip(e, kind)).join("");
+  const farChips = far.length
+    ? `<span class="mrow-far" data-far hidden>${far.map(e => chip(e, kind)).join("")}</span>
+       <button class="mrow-more" data-more>+${far.length} diverged</button>`
+    : "";
+  return `<div class="mrow mrow-${kind}"><span class="mrow-lab">${label}</span>
+            <span class="mrow-chips">${chips}${farChips}</span></div>`;
+}
+
+function cardHTML(f) {
+  const src = f.source_url
+    ? `<a class="src-link" href="${esc(f.source_url)}" target="_blank">↗</a>` : "";
+  const cores = new Set([...f.needs, ...f.review].map(e => e.core));
+  const dataCore = [...cores].join(",");
+  return `<article class="fcard" data-id="${esc(f.id)}" data-tier="${f.tier}"
+      data-source="${f.source_core}" data-subsystem="${esc(f.subsystem)}"
+      data-cores="${dataCore}" data-text="${esc((f.title + " " + f.subsystem).toLowerCase())}">
+    <div class="fc-top"><span class="tdot" style="background:${TIER[f.tier] || "#888"}"></span>
+      <span class="fc-from">from ${esc(f.source_core)}</span>${src}</div>
+    <div class="fc-title">${esc(f.title)}</div>
+    <div class="fc-meta">${esc(f.subsystem)} · ${f.magnitude} lines · ${f.tier}</div>
+    ${row("NEEDS", f.needs, "needs")}
+    ${row("REVIEW", f.review, "review")}
+    ${row("HAS IT", f.has_it, "has_it")}
+    ${row("N/A", f.na, "na")}
+  </article>`;
+}
+
+function render() {
+  const board = $("#port-board");
+  board.classList.add("fix-grid");
+  board.innerHTML = data.fixes.length
+    ? data.fixes.map(cardHTML).join("")
+    : `<div class="empty-state">nothing to port — every fix is present or divergent</div>`;
+  applyFilters();
+}
+
+function applyFilters() {
+  const core = $("#f-core").value, tier = $("#f-tier").value,
+    src = $("#f-source").value, sub = $("#f-subsystem").value,
+    q = $("#f-search").value.trim().toLowerCase(),
+    view = $("#port-views .on")?.dataset.view || "all";
+  for (const card of document.querySelectorAll(".fcard")) {
+    const cs = (card.dataset.cores || "").split(",");
+    let show = true;
+    if (core && !cs.includes(core)) show = false;
+    if (tier && card.dataset.tier !== tier) show = false;
+    if (src && card.dataset.source !== src) show = false;
+    if (sub && card.dataset.subsystem !== sub) show = false;
+    if (q && !card.dataset.text.includes(q)) show = false;
+    if (view === "mine") {
+      const mineHere = card.querySelector(".mchip.claimed .mchip-who");
+      show = show && !![...card.querySelectorAll(".mchip-who")]
+        .find(w => w.textContent === me.username);
     }
-    if (fresh) fresh.textContent = 'as of now';
+    card.hidden = !show;
   }
+}
 
-  // gather all candidates (with column core) into a flat list
-  function allCands() {
-    var out = [];
-    (data.columns || []).forEach(function (col) {
-      (col.candidates || []).forEach(function (c) { out.push(c); });
-    });
-    return out;
-  }
-
-  function renderFilters() {
-    var fSrc = document.getElementById('f-source'), fSub = document.getElementById('f-subsystem');
-    var src = {}, sub = {};
-    allCands().forEach(function (c) { src[c.source_core] = 1; sub[c.subsystem] = 1; });
-    function fill(sel, vals) {
-      if (!sel) return;
-      Object.keys(vals).sort().forEach(function (v) {
-        var o = document.createElement('option'); o.value = v; o.textContent = v; sel.appendChild(o);
-      });
-    }
-    if (fSrc && fSrc.options.length <= 1) fill(fSrc, src);
-    if (fSub && fSub.options.length <= 1) fill(fSub, sub);
-  }
-
-  function overlay(c) { return c.board || null; }
-  function assigneeOf(c) { var b = overlay(c); return b ? b.assignee : null; }
-  function statusOf(c) { var b = overlay(c); return b ? b.status : 'open'; }
-
-  function cardHTML(c) {
-    // TIER maps to a hard-coded hex (or fallback); c.tier itself is never interpolated into CSS
-    var dot = '<span class="tdot" style="background:' + (TIER[c.tier] || '#59636e') + '"></span>';
-    var safeUrl = /^https?:\/\//.test(c.source_url || '') ? c.source_url : '';
-    var link = safeUrl
-      ? '<a class="src-link" href="' + esc(safeUrl) + '" target="_blank" rel="noopener">↗</a>' : '';
-    var who = assigneeOf(c), st = statusOf(c);
-    var chip = who
-      ? '<span class="chip ' + (who === (me && me.username) ? 'mine' : '') + '">' + esc(who) + '</span>'
-      : '<button data-act="claim">claim</button>';
-    var pill = (st && st !== 'open') ? '<span class="pill ' + esc(st) + '">' + esc(st.replace('_', ' ')) + '</span>' : '';
-    var mineOrMaint = (who && who === (me && me.username)) || (me && me.is_maintainer);
-    var statusSel = '';
-    if (mineOrMaint && who) {
-      statusSel = '<select data-act="status"><option value="">status…</option>'
-        + STATUSES.map(function (s) {
-            return '<option value="' + s + '"' + (s === st ? ' selected' : '') + '>'
-              + s.replace('_', ' ') + '</option>'; }).join('') + '</select>'
-        + '<button data-act="link_pr">link PR</button>'
-        + '<button data-act="unassign">release</button>';
-    }
-    var maint = (me && me.is_maintainer)
-      ? '<button data-act="assign">assign…</button>'
-        + (st === 'dismissed' ? '<button data-act="restore">restore</button>'
-                              : '<button data-act="dismiss">dismiss</button>') : '';
-    var cls = 'pcard' + (st === 'dismissed' ? ' dismissed' : '');
-    return '<article class="' + cls + '" data-id="' + esc(c.id) + '" data-tier="' + esc(c.tier)
-      + '" data-source="' + esc(c.source_core) + '" data-subsystem="' + esc(c.subsystem)
-      + '" data-assignee="' + esc(who || '') + '" data-text="'
-      + esc((c.title + ' ' + c.subsystem).toLowerCase()) + '">'
-      + '<div class="pc-top">' + dot + '<span class="pc-from">from ' + esc(c.source_core) + '</span>' + link + '</div>'
-      + '<div class="pc-title">' + esc(c.title) + '</div>'
-      + '<div class="pc-meta">' + esc(c.subsystem) + ' · ' + esc(c.magnitude) + ' lines</div>'
-      + '<div class="pc-row">' + chip + pill + '</div>'
-      + '<ul class="pc-evidence" hidden>' + (c.evidence || []).map(function (e) {
-          return '<li>' + esc(e) + '</li>'; }).join('') + '</ul>'
-      + '<div class="pc-actions">' + statusSel + maint + '</div></article>';
-  }
-
-  function columnsForView() {
-    if (view === 'person') {
-      var byPerson = {};
-      allCands().forEach(function (c) {
-        var who = assigneeOf(c) || '(unassigned)';
-        (byPerson[who] = byPerson[who] || []).push(c);
-      });
-      return Object.keys(byPerson).sort().map(function (p) {
-        return { core: p, label: p, candidates: byPerson[p], count: byPerson[p].length }; });
-    }
-    return (data.columns || []).map(function (col) {
-      var cands = col.candidates;
-      if (view === 'mine') cands = cands.filter(function (c) {
-        return assigneeOf(c) === (me && me.username); });
-      return { core: col.core, label: 'Port into ' + col.core.toUpperCase(),
-               candidates: cands, count: cands.length };
-    });
-  }
-
-  function render() {
-    var cols = columnsForView();
-    board.innerHTML = cols.map(function (col) {
-      var cards = col.candidates.length
-        ? col.candidates.map(cardHTML).join('')
-        : '<div class="empty-state">nothing here</div>';
-      return '<section class="pcol" data-core="' + esc(col.core) + '">'
-        + '<div class="pcol-h"><span>' + esc(col.label) + '</span>'
-        + '<span class="pcol-ct">' + col.count + '</span></div>'
-        + '<div class="pcol-cards">' + cards + '</div></section>';
-    }).join('');
-    applyFilters();
-  }
-
-  function findCand(id) {
-    var hit = null;
-    allCands().forEach(function (c) { if (c.id === id) hit = c; });
-    return hit;
-  }
-
-  function mutate(id, action, payload) {
-    var body = Object.assign({ csrf: csrf }, payload || {});
-    fetch('/api/board/' + encodeURIComponent(id) + '/' + action, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
-    }).then(function (r) {
-      return r.json().then(function (j) { return { status: r.status, body: j }; });
-    }).then(function (res) {
-      if (res.status === 200) {
-        var c = findCand(id);
-        if (c) c.board = res.body;   // overlay shape matches _overlay()
-        render();
-      } else if (res.status === 409) {
-        toast('already claimed by ' + (res.body.assignee || 'someone'));
-        load();
-      } else if (res.status === 403) {
-        toast('not allowed');
-      } else {
-        toast((res.body && res.body.error) || 'action failed');
-      }
-    }).catch(function () { toast('network error'); });
-  }
-
-  // --- interactions ---
-  board.addEventListener('click', function (e) {
-    var card = e.target.closest('.pcard');
-    if (!card) return;
-    var id = card.getAttribute('data-id');
-    var btn = e.target.closest('[data-act]');
-    if (btn && btn.tagName === 'BUTTON') {
-      e.stopPropagation();
-      var act = btn.getAttribute('data-act');
-      if (act === 'assign') {
-        var who = prompt('assign to which username?'); if (who) mutate(id, 'assign', { value: who });
-      } else if (act === 'dismiss') {
-        var why = prompt('dismiss reason (why this is not a port)?'); if (why) mutate(id, 'dismiss', { reason: why });
-      } else if (act === 'link_pr') {
-        var url = prompt('PR url?'); if (url) mutate(id, 'link_pr', { related_pr: url });
-      } else { mutate(id, act, {}); }
-      return;
-    }
-    if (e.target.classList.contains('pc-title')) {
-      var ev = card.querySelector('.pc-evidence'); if (ev) ev.hidden = !ev.hidden;
-    }
+async function mutate(id, action, payload) {
+  const r = await fetch(`/api/board/${encodeURIComponent(id)}/${action}`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ csrf, ...payload }),
   });
-  board.addEventListener('change', function (e) {
-    var sel = e.target.closest('select[data-act="status"]');
-    if (!sel || !sel.value) return;
-    var card = e.target.closest('.pcard');
-    mutate(card.getAttribute('data-id'), 'status', { value: sel.value });
-  });
+  if (r.status === 200) { await load(); }
+  else if (r.status === 409) { alert("already claimed by someone else"); await load(); }
+  else if (r.status === 403) { alert("not allowed"); }
+  else { alert("error: " + (await r.text())); }
+}
 
-  // --- views ---
-  var views = document.getElementById('port-views');
-  if (views) views.addEventListener('click', function (e) {
-    var b = e.target.closest('button[data-view]'); if (!b) return;
-    view = b.getAttribute('data-view');
-    Array.prototype.forEach.call(views.querySelectorAll('button'), function (x) {
-      x.classList.toggle('on', x === b); });
-    render();
-  });
-
-  // --- filters ---
-  var fTier = document.getElementById('f-tier'), fSrc = document.getElementById('f-source');
-  var fSub = document.getElementById('f-subsystem'), fSearch = document.getElementById('f-search');
-  var fDis = document.getElementById('f-dismissed');
-  function applyFilters() {
-    var tier = fTier ? fTier.value : '', src = fSrc ? fSrc.value : '';
-    var sub = fSub ? fSub.value : '', q = fSearch ? fSearch.value.trim().toLowerCase() : '';
-    var showDis = !!(fDis && fDis.checked);
-    board.classList.toggle('show-dismissed', showDis);
-    Array.prototype.forEach.call(board.querySelectorAll('.pcard'), function (card) {
-      var ok = (!tier || card.getAttribute('data-tier') === tier)
-        && (!src || card.getAttribute('data-source') === src)
-        && (!sub || card.getAttribute('data-subsystem') === sub)
-        && (!q || card.getAttribute('data-text').indexOf(q) !== -1)
-        && (showDis || !card.classList.contains('dismissed'));
-      card.style.display = ok ? '' : 'none';
-    });
+document.addEventListener("click", (e) => {
+  const more = e.target.closest("[data-more]");
+  if (more) { const f = more.previousElementSibling; f.hidden = !f.hidden;
+    more.textContent = f.hidden ? more.textContent.replace("hide", "+") : "hide diverged";
+    return; }
+  const act = e.target.closest(".mchip-act");
+  if (act) {
+    const id = act.dataset.id, a = act.dataset.act;
+    if (a === "assign") { const u = prompt("assign to username:"); if (u) mutate(id, "assign", { value: u }); }
+    else mutate(id, a, {});
+    return;
   }
-  [fTier, fSrc, fSub, fDis].forEach(function (el) { if (el) el.addEventListener('change', applyFilters); });
-  if (fSearch) fSearch.addEventListener('input', applyFilters);
+});
+["f-core", "f-tier", "f-source", "f-subsystem"].forEach(id =>
+  $("#" + id).addEventListener("change", applyFilters));
+$("#f-search").addEventListener("input", applyFilters);
+document.querySelectorAll("#port-views button").forEach(b =>
+  b.addEventListener("click", () => {
+    document.querySelectorAll("#port-views button").forEach(x => x.classList.remove("on"));
+    b.classList.add("on"); applyFilters();
+  }));
 
-  load();
-})();
+load();
