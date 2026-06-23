@@ -129,3 +129,21 @@ async def test_two_fixes_do_not_cross_contaminate(session):
     # each fix must have exactly one verdict — no contamination from the other's propagation
     assert len(await repo.for_fix("pgA")) == 1
     assert len(await repo.for_fix("pgB")) == 1
+
+
+async def test_one_failing_core_does_not_abort_batch(session):
+    # a git error on one (fix, core) is recorded and skipped, not fatal
+    await _fix(session, pg_id="pgE", source_core="three", source_sha="sE",
+               subsystem="src/shared/Db", classification="shared",
+               present_cores=["three"], absent_cores=["two"])
+    await session.commit()
+
+    class Boom(FakeGitClient):
+        async def apply_check(self, core, patch_text, *, reverse=False):
+            raise RuntimeError("git blew up")
+
+    fake = Boom(diffs={("three", "sE"): "PE"},
+                paths={"two": ["src/shared/Db/x.cpp"]})
+    counts = await compute_verdicts(session, fake)
+    assert counts["errors"] >= 1
+    assert await PortVerdictRepository(session).get("pgE", "two") is None

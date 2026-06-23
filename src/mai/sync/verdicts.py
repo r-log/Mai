@@ -42,7 +42,7 @@ async def compute_verdicts(session: AsyncSession, git_client) -> dict:
     vrepo = PortVerdictRepository(session)
     sc_repo = SubsystemClassRepository(session)
     counts = {"needs": 0, "review": 0, "not_applicable": 0, "has_it": 0,
-              "cached": 0, "recomputed": 0}
+              "cached": 0, "recomputed": 0, "errors": 0}
     head_cache: dict[str, str] = {}
 
     for pg_id, gd in groups.items():
@@ -66,44 +66,49 @@ async def compute_verdicts(session: AsyncSession, git_client) -> dict:
         patch: str | None = None
 
         for target_core, _ in gd["absent"]:
-            if target_core not in head_cache:
-                head_cache[target_core] = await git_client.head_sha(target_core)
-            base = head_cache[target_core]
-            existing = await vrepo.get(pg_id, target_core)
-            if (existing is not None and existing.source_sha == source_sha
-                    and existing.base_sha == base):
-                counts["cached"] += 1
-                counts[existing.verdict] = counts.get(existing.verdict, 0) + 1
-                continue
+            # A git error on one (fix, core) must not abort the whole batch.
+            try:
+                if target_core not in head_cache:
+                    head_cache[target_core] = await git_client.head_sha(target_core)
+                base = head_cache[target_core]
+                existing = await vrepo.get(pg_id, target_core)
+                if (existing is not None and existing.source_sha == source_sha
+                        and existing.base_sha == base):
+                    counts["cached"] += 1
+                    counts[existing.verdict] = counts.get(existing.verdict, 0) + 1
+                    continue
 
-            if patch is None:
-                patch = await git_client.diff(source_core, source_sha)
-            exists = await git_client.paths_exist(target_core, paths)
-            if not any(exists.values()):
-                verdict, apply_result = "not_applicable", "file_absent"
-            elif await git_client.apply_check(target_core, patch, reverse=True) == "reverse_clean":
-                verdict, apply_result = "has_it", "reverse_clean"
-            else:
-                apply_result = await git_client.apply_check(target_core, patch)
-                if apply_result == "clean":
-                    verdict = "needs" if relevance == "portable" else "review"
-                elif apply_result == "file_absent":
-                    verdict = "not_applicable"
+                if patch is None:
+                    patch = await git_client.diff(source_core, source_sha)
+                exists = await git_client.paths_exist(target_core, paths)
+                if not any(exists.values()):
+                    verdict, apply_result = "not_applicable", "file_absent"
+                elif await git_client.apply_check(target_core, patch, reverse=True) == "reverse_clean":
+                    verdict, apply_result = "has_it", "reverse_clean"
                 else:
-                    verdict = "review"
+                    apply_result = await git_client.apply_check(target_core, patch)
+                    if apply_result == "clean":
+                        verdict = "needs" if relevance == "portable" else "review"
+                    elif apply_result == "file_absent":
+                        verdict = "not_applicable"
+                    else:
+                        verdict = "review"
 
-            confidence = "high" if verdict in ("needs", "has_it") else "medium"
-            evidence = [f"source {source_core}@{source_sha}",
-                        f"apply {apply_result}", f"relevance {relevance} ({rep})",
-                        f"absent-by-patch-id in {target_core}"]
-            await vrepo.upsert(
-                pg_id, target_core, verdict=verdict, apply_result=apply_result,
-                relevance=relevance, source_core=source_core, source_sha=source_sha,
-                base_sha=base, subsystem=rep, magnitude=magnitude,
-                tier=magnitude_tier(magnitude), confidence=confidence,
-                similar_commit=None, evidence=evidence)
-            counts["recomputed"] += 1
-            counts[verdict] = counts.get(verdict, 0) + 1
+                confidence = "high" if verdict in ("needs", "has_it") else "medium"
+                evidence = [f"source {source_core}@{source_sha}",
+                            f"apply {apply_result}", f"relevance {relevance} ({rep})",
+                            f"absent-by-patch-id in {target_core}"]
+                await vrepo.upsert(
+                    pg_id, target_core, verdict=verdict, apply_result=apply_result,
+                    relevance=relevance, source_core=source_core, source_sha=source_sha,
+                    base_sha=base, subsystem=rep, magnitude=magnitude,
+                    tier=magnitude_tier(magnitude), confidence=confidence,
+                    similar_commit=None, evidence=evidence)
+                counts["recomputed"] += 1
+                counts[verdict] = counts.get(verdict, 0) + 1
+            except Exception:  # noqa: BLE001 - batch derivation; record + continue
+                counts["errors"] += 1
+                continue
 
     await session.commit()
     return counts

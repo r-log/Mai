@@ -81,3 +81,13 @@ async def test_apply_check_reverse_clean_when_already_present(tmp_path):
         "@@ -1 +1,2 @@\n one\n+two\n"
     )
     assert await client.apply_check("c", already, reverse=True) == "reverse_clean"
+
+
+async def test_ensure_worktree_self_heals_stale_registration(tmp_path):
+    import shutil as _sh
+    from pathlib import Path
+    client = await _client(tmp_path)
+    wt = await client.ensure_worktree("c")
+    _sh.rmtree(wt)                       # simulate a crashed run: dir gone, registration stale
+    wt2 = await client.ensure_worktree("c")   # must self-heal, not raise
+    assert (Path(wt2) / "a.txt").exists()

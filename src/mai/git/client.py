@@ -1,4 +1,5 @@
 import asyncio
+import shutil
 from pathlib import Path
 from typing import Protocol
 
@@ -148,6 +149,16 @@ class LocalGitClient:
             await self._run(["-C", str(wt), "reset", "--hard", head])
             await self._run(["-C", str(wt), "clean", "-fdq"])
         else:
+            # Self-heal a stale/half-created/corrupt worktree (e.g. left by a crashed
+            # run): remove any stray working dir AND the registration's admin entry
+            # (<mirror>.git/worktrees/<core>) directly, since `prune` keeps dangling
+            # entries for gc.worktreePruneExpire (3 months) and skips corrupt ones.
+            if wt.exists():
+                shutil.rmtree(wt, ignore_errors=True)
+            admin = self._path(core) / "worktrees" / core
+            if admin.exists():
+                shutil.rmtree(admin, ignore_errors=True)
+            await self._git(core, "worktree", "prune", "--expire=now")
             wt.parent.mkdir(parents=True, exist_ok=True)
             await self._git(core, "worktree", "add", "--detach", "--force",
                             str(wt), head)
