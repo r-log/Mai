@@ -36,6 +36,14 @@ class LocalGitClient:
         # resolves it against the process cwd. A relative path makes those disagree
         # (worktree created inside the mirror, applies run against an empty dir).
         self._wt_root = wt_root.resolve()
+        # Per-core caches that make ensure_worktree a no-op on the hot path: a
+        # clean worktree at a known HEAD needs no reset/clean. Only apply_fraction's
+        # `--reject` dirties the tree (apply --check never writes), and only fetch
+        # moves HEAD -- both invalidate below. This collapses ~4 git spawns/check
+        # (config+rev-parse+reset+clean) to zero, the dominant cost on Windows.
+        self._configured: set[str] = set()   # core.autocrlf/fsmonitor set once
+        self._head: dict[str, str] = {}       # cached HEAD per core
+        self._dirty: set[str] = set()         # cores whose worktree needs reset
 
     def _path(self, core: str) -> Path:
         return self._root / f"{core}.git"
@@ -69,6 +77,9 @@ class LocalGitClient:
 
     async def fetch(self, core: str) -> None:
         await self._git(core, "fetch", "--prune")
+        # HEAD may have moved; force the next ensure_worktree to re-read + reset.
+        self._head.pop(core, None)
+        self._dirty.add(core)
 
     async def new_commits(self, core: str, since_sha: str | None) -> list[CommitMeta]:
         rng = "HEAD" if since_sha is None else f"{since_sha}..HEAD"
@@ -134,12 +145,20 @@ class LocalGitClient:
         return await self._git(core, "diff-tree", "--root", "-p", "-M", sha)
 
     async def paths_exist(self, core: str, paths: list[str]) -> dict[str, bool]:
-        """Whether each path exists in the core's HEAD tree."""
-        result: dict[str, bool] = {}
-        for p in paths:
-            rc, _, _ = await self._run_raw(
-                ["-C", str(self._path(core)), "cat-file", "-e", f"HEAD:{p}"])
-            result[p] = rc == 0
+        """Whether each path exists in the core's HEAD tree.
+
+        One `cat-file --batch-check` spawn for all paths (output is one line per
+        input, in order; a missing object's line ends in ' missing'), instead of
+        one `cat-file -e` spawn per path -- the spawn count dominates on Windows.
+        """
+        result: dict[str, bool] = {p: False for p in paths}
+        if not paths:
+            return result
+        stdin = "".join(f"HEAD:{p}\n" for p in paths).encode("utf-8", "replace")
+        _, out, _ = await self._run_raw(
+            ["-C", str(self._path(core)), "cat-file", "--batch-check"], stdin=stdin)
+        for p, line in zip(paths, out.splitlines()):
+            result[p] = not line.endswith("missing")
         return result
 
     async def ensure_worktree(self, core: str) -> str:
@@ -148,13 +167,26 @@ class LocalGitClient:
         Returns the worktree path. The bare mirror shares its object store with the
         worktree, so after a fetch the new objects are present and the worktree is
         reset to the mirror's current HEAD.
+
+        Hot path: an existing, clean worktree at the cached HEAD returns immediately
+        with no git spawn. A reset/clean runs only on first creation, after a fetch
+        moved HEAD, or after apply_fraction's `--reject` dirtied the tree.
         """
-        await self._git(core, "config", "core.autocrlf", "false")
-        head = (await self._git(core, "rev-parse", "HEAD")).strip()
+        if core not in self._configured:
+            await self._git(core, "config", "core.autocrlf", "false")
+            await self._git(core, "config", "core.fsmonitor", "false")
+            self._configured.add(core)
+        head = self._head.get(core)
+        if head is None:
+            head = (await self._git(core, "rev-parse", "HEAD")).strip()
+            self._head[core] = head
         wt = self._wt_root / core
+        if (wt / ".git").exists() and core not in self._dirty:
+            return str(wt)
         if (wt / ".git").exists():
             await self._run(["-C", str(wt), "reset", "--hard", head])
             await self._run(["-C", str(wt), "clean", "-fdq"])
+            self._dirty.discard(core)
         else:
             # Self-heal a stale/half-created/corrupt worktree (e.g. left by a crashed
             # run): remove any stray working dir AND the registration's admin entry
@@ -169,6 +201,7 @@ class LocalGitClient:
             wt.parent.mkdir(parents=True, exist_ok=True)
             await self._git(core, "worktree", "add", "--detach", "--force",
                             str(wt), head)
+            self._dirty.discard(core)
         return str(wt)
 
     async def apply_check(self, core: str, patch_text: str, *,
@@ -208,6 +241,9 @@ class LocalGitClient:
         wt = await self.ensure_worktree(core)
         await self._run_raw(["-C", wt, "apply", "--reject", "-"],
                             stdin=patch_text.encode("utf-8", "replace"))
+        # `--reject` writes clean hunks + .rej files into the tree: it is now dirty,
+        # so the next ensure_worktree for this core must reset before reuse.
+        self._dirty.add(core)
         rejected = 0
         for p in paths:
             rej = Path(wt) / (p + ".rej")
