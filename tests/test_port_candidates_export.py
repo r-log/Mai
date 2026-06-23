@@ -42,7 +42,7 @@ async def test_groups_by_target_sorts_and_joins(session):
     assert out["summary"]["total"] == 2          # only open
     assert out["summary"]["tiers"] == {"surgical": 1, "small": 1, "moderate": 0, "bulk": 0}
     cols = {c["core"]: c for c in out["columns"]}
-    assert [c["core"] for c in out["columns"]] == ["zero", "one", "two", "three"]  # all cores, ordered
+    assert [c["core"] for c in out["columns"]] == ["zero", "one", "two", "three", "four"]  # all cores, ordered
     three = cols["three"]
     assert three["count"] == 2
     assert [x["tier"] for x in three["candidates"]] == ["surgical", "small"]  # surgical first

@@ -7,7 +7,8 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from mai.db.models import (Commit, DriftObservation, PatchGroup, PortCandidate,
-                           Report, Repo, SourceRecord, Verification)
+                           PortVerdict, Report, Repo, SourceRecord, Verification)
+from mai.sync.verdicts import closeness_label
 from mai.publish.areas import AREAS, area_of
 from mai.publish.slug import safe_slug
 from mai.publish.views import counts, iter_bug_reports, report_bundle
@@ -161,7 +162,7 @@ async def build_pushes(session: AsyncSession, limit: int = 8) -> dict:
 
 
 _TIER_RANK = {"surgical": 0, "small": 1, "moderate": 2, "bulk": 3}
-_CORE_ORDER = {"zero": 0, "one": 1, "two": 2, "three": 3}
+_CORE_ORDER = {"zero": 0, "one": 1, "two": 2, "three": 3, "four": 4}
 
 
 async def _source_repos(session: AsyncSession) -> dict[str, str]:
@@ -216,6 +217,89 @@ async def build_port_candidates(session: AsyncSession) -> dict:
         columns.append({"core": core, "repo": repos.get(core, ""),
                         "count": len(items), "candidates": items})
     return {"summary": {"total": len(cands), "tiers": tiers}, "columns": columns}
+
+
+def _review_reason(v: "PortVerdict") -> str:
+    if v.apply_result == "conflict" and v.conflict_total:
+        b = closeness_label(v.conflict_applied, v.conflict_total)
+        return f"conflict — {v.conflict_applied}/{v.conflict_total} hunks ({b})"
+    if v.apply_result == "conflict":
+        return "conflict — binary/blob change"
+    return "diverged — needs adaptation"
+
+
+def _band_rank(entry: dict) -> int:
+    return {"near": 0, "partial": 1, "far": 2}.get(entry.get("band"), 3)
+
+
+async def build_port_verdicts(session: AsyncSession) -> dict:
+    """Per-fix cross-core port matrix for /port/, read straight off PortVerdict.
+
+    One card per fix that has >=1 needs|review core; each card lists which cores
+    need it (claimable), should be reviewed (claimable, with closeness), already
+    have it, or can't use it. REVIEW is ranked near->partial->far. Truthful by
+    construction: it never re-grades a verdict, only groups them.
+    """
+    repos = await _source_repos(session)
+    rows = list(await session.scalars(select(PortVerdict)))
+    by_fix: dict[str, list] = {}
+    for v in rows:
+        by_fix.setdefault(v.patch_group_id, []).append(v)
+    cores = sorted({v.core for v in rows} | set(_CORE_ORDER),
+                   key=lambda c: (_CORE_ORDER.get(c, 99), c))
+
+    summary: dict[str, int] = {"needs": 0, "review": 0, "na": 0, "has_it": 0}
+    fixes: list[dict] = []
+    for pg_id, vs in by_fix.items():
+        rep = vs[0]   # source_core/sha/subsystem/tier/magnitude identical across the group
+        commit = await session.scalar(
+            select(Commit).where(Commit.core == rep.source_core,
+                                 Commit.sha == rep.source_sha))
+        title = commit.message.strip().splitlines()[0] if commit and commit.message else ""
+        if not title:
+            title = f"{rep.subsystem} fix ({(rep.source_sha or '')[:8]})"
+        repo = repos.get(rep.source_core)
+        source_url = (f"https://github.com/{repo}/commit/{rep.source_sha}"
+                      if repo and rep.source_sha else None)
+
+        needs, review, na, has_it = [], [], [], []
+        for v in sorted(vs, key=lambda v: (_CORE_ORDER.get(v.core, 99), v.core)):
+            item_id = f"{pg_id}:{v.core}"
+            if v.verdict == "needs":
+                needs.append({"core": v.core, "item_id": item_id})
+            elif v.verdict == "review":
+                entry: dict = {"core": v.core, "item_id": item_id,
+                               "reason": _review_reason(v)}
+                if v.conflict_total:
+                    entry["applied"] = v.conflict_applied
+                    entry["total"] = v.conflict_total
+                    entry["band"] = closeness_label(v.conflict_applied, v.conflict_total)
+                review.append(entry)
+            elif v.verdict == "has_it":
+                has_it.append({"core": v.core})
+            else:
+                na.append({"core": v.core, "reason": "code not present"})
+        if not needs and not review:
+            continue   # not actionable -> no card
+
+        review.sort(key=lambda e: (_band_rank(e),
+                                   -(e.get("applied", 0) / e.get("total", 1))))
+        summary["needs"] += len(needs)
+        summary["review"] += len(review)
+        summary["na"] += len(na)
+        summary["has_it"] += len(has_it)
+        fixes.append({
+            "id": pg_id, "title": title, "source_core": rep.source_core,
+            "source_url": source_url, "subsystem": rep.subsystem,
+            "tier": rep.tier, "magnitude": rep.magnitude,
+            "needs": needs, "review": review, "na": na, "has_it": has_it})
+
+    def _best_band(f: dict) -> int:
+        return min((_band_rank(e) for e in f["review"]), default=3)
+    fixes.sort(key=lambda f: (0 if f["needs"] else 1, _best_band(f),
+                              _TIER_RANK.get(f["tier"], 9), f["magnitude"]))
+    summary["fixes"] = len(fixes)
+    return {"summary": summary, "cores": cores, "fixes": fixes}
 
 
 async def write_dataviz(session: AsyncSession, out_dir: str) -> None:
