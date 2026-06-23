@@ -15,3 +15,8 @@ mai-data/tmp/
 mirrors/
 worktrees/
 .python-version
+
+# SDD scratch artifacts (per-task reports + review packages)
+docs/plans/task-*-report.md
+docs/plans/task-*-review.txt
+docs/plans/phase4-final-review.txt
