@@ -32,7 +32,7 @@ async def test_full_claim_flow_over_http(env):
 
     # the gated page renders
     page = await ac.get("/port")
-    assert page.status_code == 200 and 'id="port-board"' in page.text
+    assert page.status_code == 200 and 'id="ready-list"' in page.text
 
     # the API gives us a csrf token
     board = (await ac.get("/api/board")).json()

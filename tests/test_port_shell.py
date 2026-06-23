@@ -9,6 +9,7 @@ from mai.web.app import _port_html
 
 def test_port_shell_wiring():
     html = _port_html("testuser", is_maintainer=False)
-    assert 'id="f-core"' in html
     assert 'src="/static/portboard.js"' in html
-    assert 'id="port-board"' in html
+    assert 'id="cc-radar"' in html        # core debt radar
+    assert 'id="ready-list"' in html      # confident-ports worklist
+    assert 'id="review-list"' in html     # closeness-ranked backlog

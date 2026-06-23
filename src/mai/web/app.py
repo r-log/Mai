@@ -71,29 +71,43 @@ def _port_html(username: str, is_maintainer: bool) -> str:
     role = "maintainer" if is_maintainer else "member"
     return _page("Mai — Port Debt", f"""
         <link rel="stylesheet" href="/static/board.css">
-        <header class="port-head">
-          <h1>Port Debt</h1>
-          <span id="port-summary" class="port-summary"></span>
-          <span id="port-fresh" class="port-fresh"></span>
-          <span class="port-me">{html.escape(username)} · {role}
-            <a href="/logout" onclick="event.preventDefault();
-               fetch('/logout',{{method:'POST'}}).then(()=>location='/login')">log out</a>
-          </span>
-        </header>
-        <nav id="port-views" class="port-views">
-          <button data-view="all" class="on">All cores</button>
-          <button data-view="mine">My ports</button>
-        </nav>
-        <div id="port-filters" class="port-filters">
-          <select id="f-core"><option value="">needs porting to… (any core)</option></select>
-          <select id="f-tier"><option value="">all tiers</option>
-            <option>surgical</option><option>small</option>
-            <option>moderate</option><option>bulk</option></select>
-          <select id="f-source"><option value="">all sources</option></select>
-          <select id="f-subsystem"><option value="">all subsystems</option></select>
-          <input id="f-search" placeholder="search title/subsystem">
+        <div class="cc">
+          <header class="cc-head">
+            <div class="cc-titlebar">
+              <span class="cc-title">Port Debt</span>
+              <span id="cc-summary" class="cc-summary"></span>
+              <span class="cc-me">{html.escape(username)} · {role}
+                <a href="/logout" onclick="event.preventDefault();
+                   fetch('/logout',{{method:'POST'}}).then(()=>location='/login')">log out</a>
+              </span>
+            </div>
+            <div class="cc-filters">
+              <input id="f-search" placeholder="search title / subsystem">
+              <select id="f-subsystem"><option value="">all subsystems</option></select>
+              <select id="f-source"><option value="">all sources</option></select>
+              <select id="f-tier"><option value="">all tiers</option>
+                <option>surgical</option><option>small</option>
+                <option>moderate</option><option>bulk</option></select>
+              <button id="f-mine" class="cc-toggle" data-on="0">My ports</button>
+              <button id="f-clear" class="cc-clear" hidden>clear core ✕</button>
+            </div>
+          </header>
+          <div id="cc-radar" class="cc-radar"></div>
+          <section class="cc-sec">
+            <h2 class="cc-h cc-h-ready">Ready to port<span id="ready-ct" class="cc-ct"></span>
+              <span class="cc-sub">git-proven · shared infra only</span></h2>
+            <div id="ready-list" class="cc-list"></div>
+          </section>
+          <section class="cc-sec">
+            <h2 class="cc-h cc-h-review">Worth reviewing<span id="review-ct" class="cc-ct"></span>
+              <span class="cc-sub">closest to applying first</span></h2>
+            <div id="review-list" class="cc-list"></div>
+          </section>
+          <div class="cc-far">
+            <button id="far-toggle" class="cc-fartoggle"></button>
+            <div id="far-list" class="cc-list" hidden></div>
+          </div>
         </div>
-        <div id="port-board" class="port-board"></div>
         <script src="/static/portboard.js"></script>""")
 
 

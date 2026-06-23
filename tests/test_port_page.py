@@ -50,8 +50,8 @@ async def test_port_shell_has_mount_points(client_pw):
     r = await ac.get("/port")
     assert r.status_code == 200
     body = r.text
-    for marker in ['id="port-board"', 'id="port-summary"', 'id="port-views"',
-                   'id="port-filters"', '/static/portboard.js', '/static/board.css']:
+    for marker in ['id="cc-radar"', 'id="cc-summary"', 'id="ready-list"',
+                   'id="review-list"', '/static/portboard.js', '/static/board.css']:
         assert marker in body
 
 
