@@ -83,7 +83,6 @@ def _port_html(username: str, is_maintainer: bool) -> str:
         <nav id="port-views" class="port-views">
           <button data-view="all" class="on">All cores</button>
           <button data-view="mine">My ports</button>
-          <button data-view="person">By person</button>
         </nav>
         <div id="port-filters" class="port-filters">
           <select id="f-core"><option value="">needs porting to… (any core)</option></select>
@@ -93,7 +92,6 @@ def _port_html(username: str, is_maintainer: bool) -> str:
           <select id="f-source"><option value="">all sources</option></select>
           <select id="f-subsystem"><option value="">all subsystems</option></select>
           <input id="f-search" placeholder="search title/subsystem">
-          <label><input type="checkbox" id="f-dismissed"> show dismissed</label>
         </div>
         <div id="port-board" class="port-board"></div>
         <script src="/static/portboard.js"></script>""")

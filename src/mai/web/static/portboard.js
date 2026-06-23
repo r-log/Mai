@@ -1,9 +1,8 @@
 let data = null, me = null, csrf = "";
 const $ = (s, r = document) => r.querySelector(s);
-const esc = (s) => (s || "").replace(/[&<>"]/g, c =>
-  ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const esc = (s) => (s || "").replace(/[&<>"']/g, c =>
+  ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const TIER = { surgical: "#1a7f37", small: "#9a6700", moderate: "#bc4c00", bulk: "#cf222e" };
-const BAND = { near: "#1a7f37", partial: "#9a6700", far: "#8b949e" };
 
 async function load() {
   const r = await fetch("/api/board");
@@ -68,7 +67,7 @@ function row(label, entries, kind) {
 
 function cardHTML(f) {
   const src = f.source_url
-    ? `<a class="src-link" href="${esc(f.source_url)}" target="_blank">↗</a>` : "";
+    ? `<a class="src-link" href="${esc(f.source_url)}" target="_blank" rel="noopener">↗</a>` : "";
   const cores = new Set([...f.needs, ...f.review].map(e => e.core));
   const dataCore = [...cores].join(",");
   return `<article class="fcard" data-id="${esc(f.id)}" data-tier="${f.tier}"
@@ -108,7 +107,6 @@ function applyFilters() {
     if (sub && card.dataset.subsystem !== sub) show = false;
     if (q && !card.dataset.text.includes(q)) show = false;
     if (view === "mine") {
-      const mineHere = card.querySelector(".mchip.claimed .mchip-who");
       show = show && !![...card.querySelectorAll(".mchip-who")]
         .find(w => w.textContent === me.username);
     }
