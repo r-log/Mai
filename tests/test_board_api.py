@@ -42,13 +42,14 @@ async def test_board_requires_session(env):
     assert r.headers["location"] == "/login"
 
 
-async def test_board_returns_columns_and_csrf_and_me(env):
+async def test_board_returns_fixes_and_csrf_and_me(env):
     ac, _, pws = env
     await _login(ac, "antz", pws["antz"])
     r = await ac.get("/api/board")
     assert r.status_code == 200
     body = r.json()
-    assert "columns" in body and "summary" in body
+    assert "fixes" in body and "summary" in body
+    assert "columns" not in body
     assert isinstance(body["csrf"], str) and body["csrf"]
     assert body["me"] == {"username": "antz", "is_maintainer": True}
 
@@ -60,8 +61,7 @@ async def test_board_overlays_board_item(env):
         await s.commit()
     await _login(ac, "dev", pws["dev"])
     body = (await ac.get("/api/board")).json()
-    # find the overlay for our id across columns (candidate may not be in engine data;
-    # the overlay endpoint still reports active board items it knows about under _orphans)
+    # the overlay for an item with no matching verdict entry appears in _orphans
     overlays = {o["port_candidate_id"]: o for o in body.get("_orphans", [])}
     assert overlays["pgX:three"]["assignee"] == "dev"
     assert overlays["pgX:three"]["status"] == "claimed"

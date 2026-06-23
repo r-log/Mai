@@ -4,7 +4,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
 
 from mai.board.service import ClaimConflict, apply_action
-from mai.publish.dataviz import build_port_candidates
+from mai.publish.dataviz import build_port_verdicts
 from mai.repository.board import BoardItemRepository
 from mai.repository.users import UserRepository
 
@@ -34,27 +34,27 @@ def make_board_router(session_factory) -> APIRouter:
     async def get_board(request: Request):
         username = request.session["username"]
         async with session_factory() as session:
-            board = await build_port_candidates(session)
-            items = {bi.port_candidate_id: bi
-                     for bi in await BoardItemRepository(session).active()}
+            board = await build_port_verdicts(session)
+            items = await BoardItemRepository(session).active()
             user = await UserRepository(session).get(username)
 
-        seen = set()
-        for col in board["columns"]:
-            for cand in col["candidates"]:
-                bi = items.get(cand["id"])
-                cand["board"] = _overlay(bi) if bi else None
-                if bi:
-                    seen.add(cand["id"])
-        # board items with no matching open candidate (e.g. just-claimed test ids)
+        overlays = {it.port_candidate_id: _overlay(it) for it in items}
+        seen: set[str] = set()
+        for fix in board["fixes"]:
+            for entry in (*fix["needs"], *fix["review"]):
+                ov = overlays.get(entry["item_id"])
+                if ov is not None:
+                    entry["board"] = ov
+                    seen.add(entry["item_id"])
+        # board items with no matching actionable entry (e.g. just-claimed test ids)
         board["_orphans"] = [
-            {"port_candidate_id": pcid, **_overlay(bi)}
-            for pcid, bi in items.items() if pcid not in seen
+            {"port_candidate_id": pcid, **ov}
+            for pcid, ov in overlays.items() if pcid not in seen
         ]
         board["csrf"] = ensure_csrf(request)
         board["me"] = {"username": username,
                        "is_maintainer": bool(user and user.is_maintainer)}
-        return board
+        return JSONResponse(board)
 
     @router.post("/{item_id}/{action}")
     async def mutate(request: Request, item_id: str, action: str):
