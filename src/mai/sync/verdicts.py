@@ -9,6 +9,12 @@ from mai.repository.port_verdict import PortVerdictRepository
 from mai.repository.subsystem_class import SubsystemClassRepository
 
 
+def closeness_label(applied: int, total: int) -> str:
+    """Band a conflict's applied-hunk fraction: near >= 0.8, partial >= 0.4, else far."""
+    frac = (applied / total) if total else 0.0
+    return "near" if frac >= 0.8 else "partial" if frac >= 0.4 else "far"
+
+
 def resolve_relevance(files, classes: dict[str, str]) -> tuple[str, int, str]:
     """Resolve a fix's portability from its touched files + subsystem classes.
 
@@ -98,12 +104,20 @@ async def compute_verdicts(session: AsyncSession, git_client) -> dict:
                 evidence = [f"source {source_core}@{source_sha}",
                             f"apply {apply_result}", f"relevance {relevance} ({rep})",
                             f"absent-by-patch-id in {target_core}"]
+                conflict_applied = conflict_total = None
+                if verdict == "review" and apply_result == "conflict":
+                    a, t = await git_client.apply_fraction(target_core, patch, paths)
+                    if t > 0:
+                        conflict_applied, conflict_total = a, t
+                        evidence.append(
+                            f"conflict: {a}/{t} hunks apply ({closeness_label(a, t)})")
                 await vrepo.upsert(
                     pg_id, target_core, verdict=verdict, apply_result=apply_result,
                     relevance=relevance, source_core=source_core, source_sha=source_sha,
                     base_sha=base, subsystem=rep, magnitude=magnitude,
                     tier=magnitude_tier(magnitude), confidence=confidence,
-                    similar_commit=None, evidence=evidence)
+                    similar_commit=None, evidence=evidence,
+                    conflict_applied=conflict_applied, conflict_total=conflict_total)
                 counts["recomputed"] += 1
                 counts[verdict] = counts.get(verdict, 0) + 1
             except Exception:  # noqa: BLE001 - batch derivation; record + continue
