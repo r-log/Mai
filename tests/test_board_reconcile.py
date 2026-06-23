@@ -20,9 +20,10 @@ async def test_reconcile_keeps_items_with_open_candidate(session, monkeypatch):
     await session.commit()
 
     async def fake_build(_session):
-        return {"columns": [{"candidates": [{"id": "live:three"}]}]}
+        return {"fixes": [{"needs": [{"item_id": "live:three"}], "review": []}],
+                "summary": {}, "cores": []}
 
-    monkeypatch.setattr(cycle, "build_port_candidates", fake_build)
+    monkeypatch.setattr(cycle, "build_port_verdicts", fake_build)
     archived = await reconcile_board(session)
     assert archived == 0
     assert (await BoardItemRepository(session).get("live:three")).archived is False

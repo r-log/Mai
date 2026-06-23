@@ -2,7 +2,7 @@ from dataclasses import dataclass
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from mai.publish.dataviz import build_port_candidates
+from mai.publish.dataviz import build_port_verdicts
 from mai.repository.repos import RepoRepository
 
 
@@ -16,11 +16,12 @@ class RefreshResult:
 
 
 async def reconcile_board(session) -> int:
-    """Archive board items whose candidate is no longer open (engine resolved it)."""
+    """Archive board items whose verdict is no longer actionable (needs or review)."""
     from mai.repository.board import BoardItemRepository
 
-    board = await build_port_candidates(session)
-    open_ids = {c["id"] for col in board["columns"] for c in col["candidates"]}
+    board = await build_port_verdicts(session)
+    open_ids = {e["item_id"] for f in board["fixes"]
+                for e in (*f["needs"], *f["review"])}
     repo = BoardItemRepository(session)
     archived = 0
     for item in await repo.active():
@@ -49,6 +50,7 @@ async def run_refresh_cycle(
     from mai.sync.classify import classify_subsystems
     from mai.sync.portcandidates import compute_port_candidates
     from mai.sync.propagate import compute_propagation
+    from mai.sync.verdicts import compute_verdicts
 
     repos = await RepoRepository(session).all()
 
@@ -67,6 +69,7 @@ async def run_refresh_cycle(
     await compute_propagation(session)
     await classify_subsystems(session)
     pc = await compute_port_candidates(session)
+    await compute_verdicts(session, git_client)
     await session.commit()
 
     archived = await reconcile_board(session)
