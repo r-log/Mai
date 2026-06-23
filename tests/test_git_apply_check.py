@@ -91,3 +91,19 @@ async def test_ensure_worktree_self_heals_stale_registration(tmp_path):
     _sh.rmtree(wt)                       # simulate a crashed run: dir gone, registration stale
     wt2 = await client.ensure_worktree("c")   # must self-heal, not raise
     assert (Path(wt2) / "a.txt").exists()
+
+
+async def test_worktree_path_absolute_with_relative_dirs(tmp_path, monkeypatch):
+    # relative mirror/worktree dirs must still yield an ABSOLUTE worktree path so
+    # `git -C <mirror> worktree add` and apply_check agree on the location (else the
+    # worktree lands inside the mirror and applies run against an empty dir).
+    from pathlib import Path
+    monkeypatch.chdir(tmp_path)
+    src = tmp_path / "src"
+    _repo(src)
+    client = LocalGitClient("mirrors", "wt")          # both relative
+    await client.ensure_mirror("c", src.as_uri())
+    wt = await client.ensure_worktree("c")
+    assert Path(wt).is_absolute()
+    assert (Path(wt) / "a.txt").exists()              # apply target finds files
+    assert await client.apply_check("c", CLEAN) == "clean"   # not file_absent

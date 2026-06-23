@@ -27,8 +27,13 @@ class LocalGitClient:
 
     def __init__(self, mirror_dir: str, worktree_dir: str | None = None):
         self._root = Path(mirror_dir)
-        self._wt_root = (Path(worktree_dir) if worktree_dir
-                         else self._root.parent / "worktrees")
+        wt_root = (Path(worktree_dir) if worktree_dir
+                   else self._root.parent / "worktrees")
+        # MUST be absolute: `git -C <mirror> worktree add <path>` resolves a relative
+        # <path> against the mirror dir, but apply_check's `git -C <path> apply`
+        # resolves it against the process cwd. A relative path makes those disagree
+        # (worktree created inside the mirror, applies run against an empty dir).
+        self._wt_root = wt_root.resolve()
 
     def _path(self, core: str) -> Path:
         return self._root / f"{core}.git"
