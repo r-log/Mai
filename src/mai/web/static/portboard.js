@@ -1,6 +1,8 @@
 // Port-Debt command center: per-core debt radar + a confident-ports worklist
-// + a closeness-ranked review backlog. One row = one (fix -> target core) task
-// = one claimable BoardItem. Read-only data from /api/board; mutations POST back.
+// + a closeness-ranked review backlog. One row = one port task. The SAME fix
+// into the SAME core can arrive from several source forks as distinct
+// patch-groups; those are collapsed to one row (every source listed) and a
+// claim acts on all the underlying BoardItems at once.
 let data = null, me = null, csrf = "";
 const state = { core: "", sub: "", src: "", tier: "", q: "", mine: false, far: false };
 
@@ -36,6 +38,31 @@ function tasks() {
   return { ready, review, far };
 }
 
+// Merge duplicate ports (same target core + subsystem + title) into one row:
+// list every source fork, keep all BoardItem ids, surface the closest-applying
+// variant for review, and prefer a claimed overlay if any duplicate is claimed.
+function collapse(rows) {
+  const map = new Map();
+  for (const t of rows) {
+    const key = t.core + "|" + t.f.subsystem + "|" + t.f.title;
+    let m = map.get(key);
+    if (!m) {
+      m = { core: t.core, f: t.f, kind: t.kind, ids: [], sources: [], board: t.board,
+            applied: t.applied, total: t.total, band: t.band, reason: t.reason };
+      map.set(key, m);
+    }
+    m.ids.push(t.id);
+    if (!m.sources.includes(t.f.source_core)) m.sources.push(t.f.source_core);
+    if (t.board && t.board.assignee && !(m.board && m.board.assignee)) m.board = t.board;
+    if (t.total && (!m.total || t.applied / t.total > m.applied / m.total)) {
+      m.applied = t.applied; m.total = t.total; m.band = t.band;
+      m.reason = t.reason; m.f = t.f;
+    }
+  }
+  for (const m of map.values()) { m.id = m.ids[0]; m.sources.sort((a, b) => ci(a) - ci(b)); }
+  return [...map.values()];
+}
+
 function pass(t) {
   if (state.core && t.core !== state.core) return false;
   if (state.sub && t.f.subsystem !== state.sub) return false;
@@ -53,8 +80,7 @@ function buildFilters() {
     const o = document.createElement("option"); o.value = s; o.textContent = s;
     $("#f-subsystem").appendChild(o);
   }
-  const srcs = [...new Set(data.fixes.map(f => f.source_core))].sort(
-    (a, b) => ci(a) - ci(b));
+  const srcs = [...new Set(data.fixes.map(f => f.source_core))].sort((a, b) => ci(a) - ci(b));
   for (const s of srcs) {
     const o = document.createElement("option");
     o.value = s; o.textContent = `from ${cap(s)}`;
@@ -65,21 +91,22 @@ function buildFilters() {
 // ---- render ------------------------------------------------------------
 function render() {
   const all = tasks();
+  const cReady = collapse(all.ready), cReview = collapse(all.review);
   $("#cc-summary").textContent =
-    `${all.ready.length} ready · ${all.review.length} to review · 5 forks`;
-  renderRadar(all);
-  renderReady(all.ready.filter(pass));
-  renderReview(all.review.filter(pass));
+    `${cReady.length} ready · ${cReview.length} to review · 5 forks`;
+  renderRadar(cReady, cReview);
+  renderReady(collapse(all.ready.filter(pass)));
+  renderReview(collapse(all.review.filter(pass)));
   renderFar(all.far);
   $("#f-clear").hidden = !state.core;
   $("#f-mine").dataset.on = state.mine ? "1" : "0";
 }
 
-function renderRadar(all) {
+function renderRadar(cReady, cReview) {
   const need = {}, rev = {};
   for (const c of CORES) { need[c] = 0; rev[c] = 0; }
-  for (const t of all.ready) need[t.core]++;
-  for (const t of all.review) rev[t.core]++;
+  for (const m of cReady) need[m.core]++;
+  for (const m of cReview) rev[m.core]++;
   const maxRev = Math.max(1, ...CORES.map(c => rev[c]));
   $("#cc-radar").innerHTML = CORES.map(c => {
     const w = Math.round(100 * rev[c] / maxRev);
@@ -94,20 +121,23 @@ function renderRadar(all) {
 
 function assigneeBtn(t) {
   const ov = t.board || {};
+  const ids = (t.ids || [t.id]).join(",");
   if (!ov.assignee)
-    return `<button class="claim" data-act="claim" data-id="${t.id}">claim</button>`;
+    return `<button class="claim" data-act="claim" data-ids="${ids}">claim</button>`;
   const mine = ov.assignee === me.username;
   const cls = mine ? "claim mine" : "claim taken";
   const act = mine ? "unassign" : (me.is_maintainer ? "assign" : "");
   return `<button class="${cls}" ${act ? `data-act="${act}"` : "disabled"}
-    data-id="${t.id}" title="${esc(ov.status || "")}">${mine ? "✓ you" : "@" + esc(ov.assignee)}</button>`;
+    data-ids="${ids}" title="${esc(ov.status || "")}">${mine ? "✓ you" : "@" + esc(ov.assignee)}</button>`;
 }
 
 function metaCols(t) {
+  const from = (t.sources && t.sources.length ? t.sources : [t.f.source_core]).map(cap).join(", ");
+  const dup = t.ids && t.ids.length > 1 ? `<span class="t-dup">×${t.ids.length}</span>` : "";
   return `<a class="t-core core-${t.core}" title="port into ${cap(t.core)} (${EXP[t.core]})">→${cap(t.core)}</a>
     <span class="t-sub">${esc(t.f.subsystem)}</span>
     <span class="t-title">${esc(t.f.title)}</span>
-    <span class="t-from">from ${cap(t.f.source_core)}</span>`;
+    <span class="t-from">from ${esc(from)}${dup}</span>`;
 }
 
 function readyRow(t) {
@@ -123,7 +153,9 @@ function readyRow(t) {
       <b>Clean apply + all-shared.</b> Every file this fix touches is cross-fork
       infrastructure (<code>${esc(t.f.subsystem)}</code>), and the patch applies
       byte-clean to ${cap(t.core)} — the surrounding code there is identical, so it is
-      the same bug and the same fix. ${t.f.magnitude} lines.
+      the same bug and the same fix.${t.ids.length > 1
+        ? ` Present in ${t.sources.map(cap).join(", ")} — porting from any one resolves it.` : ""}
+      ${t.f.magnitude} lines.
     </div></div>`;
 }
 
@@ -152,7 +184,6 @@ function renderReady(rows) {
     list.innerHTML = `<div class="cc-empty">no confident ports match — try clearing filters</div>`;
     return;
   }
-  // group by target core (skip grouping when a single core is filtered)
   const groups = state.core ? [state.core] : CORES;
   list.innerHTML = groups.map(c => {
     const g = rows.filter(t => t.core === c).sort((a, b) =>
@@ -178,7 +209,7 @@ function renderReview(rows) {
 }
 
 function renderFar(far) {
-  const shown = far.filter(pass);
+  const shown = collapse(far.filter(pass));
   const btn = $("#far-toggle"), list = $("#far-list");
   btn.textContent = state.far
     ? `▾ hide ${shown.length} diverged`
@@ -190,15 +221,20 @@ function renderFar(far) {
 }
 
 // ---- interaction -------------------------------------------------------
-async function mutate(id, action, payload) {
-  const r = await fetch(`/api/board/${encodeURIComponent(id)}/${action}`, {
-    method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ csrf, ...payload }),
-  });
-  if (r.status === 200) await load();
-  else if (r.status === 409) { alert("already claimed by someone else"); await load(); }
-  else if (r.status === 403) alert("maintainers only");
-  else alert("error: " + (await r.text()));
+async function mutateMany(ids, action, payload) {
+  let conflict = false, forbidden = false;
+  for (const id of ids) {
+    const r = await fetch(`/api/board/${encodeURIComponent(id)}/${action}`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ csrf, ...payload }),
+    });
+    if (r.status === 409) conflict = true;
+    else if (r.status === 403) forbidden = true;
+    else if (r.status !== 200) { alert("error: " + (await r.text())); break; }
+  }
+  if (forbidden) alert("maintainers only");
+  else if (conflict) alert("already claimed by someone else");
+  await load();
 }
 
 document.addEventListener("click", (e) => {
@@ -211,9 +247,10 @@ document.addEventListener("click", (e) => {
   if (why) { const p = why.parentElement.querySelector(".t-proof"); p.hidden = !p.hidden; return; }
   const act = e.target.closest("[data-act]");
   if (act) {
-    const id = act.dataset.id, a = act.dataset.act;
-    if (a === "assign") { const u = prompt("assign to username:"); if (u) mutate(id, "assign", { value: u }); }
-    else mutate(id, a, {});
+    const ids = (act.dataset.ids || "").split(",").filter(Boolean);
+    const a = act.dataset.act;
+    if (a === "assign") { const u = prompt("assign to username:"); if (u) mutateMany(ids, "assign", { value: u }); }
+    else mutateMany(ids, a, {});
   }
 });
 ["f-subsystem", "f-source", "f-tier"].forEach(id =>
