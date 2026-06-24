@@ -10,6 +10,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from mai.repository.users import UserRepository
 from mai.web.board_api import make_board_router
+from mai.web.me_api import make_me_router
 
 _PUBLIC = {"/login", "/logout"}
 
@@ -75,6 +76,7 @@ def _port_html(username: str, is_maintainer: bool) -> str:
           <header class="cc-head">
             <div class="cc-titlebar">
               <span class="cc-title">Port Debt</span>
+              <nav class="cc-nav"><a href="/port" class="on">Board</a><a href="/me">Control Center</a></nav>
               <span id="cc-summary" class="cc-summary"></span>
               <span class="cc-me">{html.escape(username)} · {role}
                 <a href="/logout" onclick="event.preventDefault();
@@ -109,6 +111,54 @@ def _port_html(username: str, is_maintainer: bool) -> str:
           </div>
         </div>
         <script src="/static/portboard.js"></script>""")
+
+
+def _me_html(username: str, is_maintainer: bool) -> str:
+    role = "maintainer" if is_maintainer else "member"
+    return _page("Mai — Control Center", f"""
+        <link rel="stylesheet" href="/static/board.css">
+        <div class="cc">
+          <header class="cc-head">
+            <div class="cc-titlebar">
+              <span class="cc-title">Control Center</span>
+              <nav class="cc-nav"><a href="/port">Board</a><a href="/me" class="on">Control Center</a></nav>
+              <span class="cc-me">{html.escape(username)} · {role}
+                <a href="/logout" onclick="event.preventDefault();
+                   fetch('/logout',{{method:'POST'}}).then(()=>location='/login')">log out</a>
+              </span>
+            </div>
+          </header>
+          <div id="me-cards" class="me-cards"></div>
+          <div class="me-grid">
+            <section class="cc-sec me-main">
+              <h2 class="cc-h cc-h-ready">My todo<span id="todo-ct" class="cc-ct"></span>
+                <span class="cc-sub">auto-resolves when the port lands — no closing</span></h2>
+              <div id="todo-list" class="cc-list"></div>
+              <h2 class="cc-h me-shiph">Shipped<span id="ship-ct" class="cc-ct"></span>
+                <span class="cc-sub">detected by the engine, not marked by hand</span></h2>
+              <div id="ship-list" class="cc-list"></div>
+            </section>
+            <aside class="me-side">
+              <div class="me-panel">
+                <div class="me-panel-h">This week</div>
+                <div id="me-spark" class="me-spark"></div>
+              </div>
+              <div class="me-panel">
+                <div class="me-panel-h">Recent activity</div>
+                <div id="me-activity" class="me-activity"></div>
+              </div>
+              <div class="me-panel">
+                <div class="me-panel-h">Team</div>
+                <div id="me-team" class="me-team"></div>
+              </div>
+              <div class="me-panel">
+                <div class="me-panel-h">Project — confident ports</div>
+                <div id="me-project" class="me-project"></div>
+              </div>
+            </aside>
+          </div>
+        </div>
+        <script src="/static/me.js"></script>""")
 
 
 def create_app(session_factory, hasher, session_secret: str, *,
@@ -188,7 +238,15 @@ def create_app(session_factory, hasher, session_secret: str, *,
             user = await UserRepository(session).get(username)
         return _port_html(username, bool(user and user.is_maintainer))
 
+    @app.get("/me", response_class=HTMLResponse)
+    async def me_page(request: Request):
+        username = request.session["username"]
+        async with session_factory() as session:
+            user = await UserRepository(session).get(username)
+        return _me_html(username, bool(user and user.is_maintainer))
+
     app.include_router(make_board_router(session_factory))
+    app.include_router(make_me_router(session_factory))
     app.mount("/static",
               StaticFiles(directory=Path(__file__).parent / "static"),
               name="static")

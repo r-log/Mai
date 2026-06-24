@@ -123,7 +123,7 @@ function assigneeBtn(t) {
   const ov = t.board || {};
   const ids = (t.ids || [t.id]).join(",");
   if (!ov.assignee)
-    return `<button class="claim" data-act="claim" data-ids="${ids}">claim</button>`;
+    return `<button class="claim" data-act="claim" data-ids="${ids}">Take</button>`;
   const mine = ov.assignee === me.username;
   const cls = mine ? "claim mine" : "claim taken";
   const act = mine ? "unassign" : (me.is_maintainer ? "assign" : "");
