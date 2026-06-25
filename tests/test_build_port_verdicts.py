@@ -119,6 +119,73 @@ async def test_summary_counts_across_multiple_fixes(session):
     assert out["summary"]["na"] == 0
 
 
+async def test_symbol_blocked_needs_is_demoted_to_na(session):
+    """A clean-applying 'needs' the classifier marked NOT_APPLICABLE (missing symbol)
+    is removed from the ready lane and shown as N/A with the symbol reason — the #229 flip."""
+    session.add(PatchGroup(id="pg229", patch_id="pid229"))
+    session.add(Commit(core="three", sha="dbc229", author="a", authored_at="t",
+                       committer="a", committed_at="t", message="DBCString fix",
+                       parent_shas=[], is_merge=False))
+    # Zero: legacy verdict still 'needs' (clean+shared) but classifier state NOT_APPLICABLE.
+    session.add(PortVerdict(
+        patch_group_id="pg229", core="zero", verdict="needs", apply_result="clean",
+        relevance="portable", source_core="three", source_sha="dbc229",
+        subsystem="src/shared/DataStores", magnitude=8, tier="surgical",
+        state="not_applicable", gate_version="g3.1",
+        state_evidence=["src/shared/DataStores/DBCFileLoader.cpp: required symbol "
+                        "'loc' (parameter of AutoProduceStrings) is absent in target"]))
+    # Two: a genuinely portable target (state portable) -> stays in needs.
+    session.add(PortVerdict(
+        patch_group_id="pg229", core="two", verdict="needs", apply_result="clean",
+        relevance="portable", source_core="three", source_sha="dbc229",
+        subsystem="src/shared/DataStores", magnitude=8, tier="surgical",
+        state="portable", gate_version="g3.1"))
+    await session.commit()
+
+    out = await build_port_verdicts(session)
+    card = out["fixes"][0]
+    assert card["needs"] == [{"core": "two", "item_id": "pg229:two"}]
+    assert {e["core"] for e in card["na"]} == {"zero"}
+    assert "loc" in card["na"][0]["reason"]
+    assert out["summary"]["needs"] == 1 and out["summary"]["na"] == 1
+
+
+async def test_fix_all_symbol_blocked_is_suppressed(session):
+    """#229 against zero/one/two: every needs demoted to N/A -> not actionable -> no card."""
+    session.add(PatchGroup(id="pgAllNA", patch_id="pidAllNA"))
+    session.add(Commit(core="three", sha="allna", author="a", authored_at="t",
+                       committer="a", committed_at="t", message="needs holder layout",
+                       parent_shas=[], is_merge=False))
+    for core in ("zero", "one", "two"):
+        session.add(PortVerdict(
+            patch_group_id="pgAllNA", core=core, verdict="needs", apply_result="clean",
+            relevance="portable", source_core="three", source_sha="allna",
+            subsystem="src/shared/DataStores", magnitude=8, tier="surgical",
+            state="not_applicable", gate_version="g3.1",
+            state_evidence=["required symbol 'loc' is absent in target"]))
+    await session.commit()
+
+    out = await build_port_verdicts(session)
+    assert out["summary"]["fixes"] == 0
+    assert out["fixes"] == []
+
+
+async def test_legacy_rows_without_state_are_unchanged(session):
+    """Rows predating the gate (state is None) keep their verdict bucket — no demotion."""
+    session.add(PatchGroup(id="pgLegacy", patch_id="pidLegacy"))
+    session.add(Commit(core="three", sha="legacy", author="a", authored_at="t",
+                       committer="a", committed_at="t", message="legacy fix",
+                       parent_shas=[], is_merge=False))
+    session.add(PortVerdict(  # state defaults to None
+        patch_group_id="pgLegacy", core="two", verdict="needs", apply_result="clean",
+        relevance="portable", source_core="three", source_sha="legacy",
+        subsystem="src/shared/X", magnitude=3, tier="surgical"))
+    await session.commit()
+
+    out = await build_port_verdicts(session)
+    assert out["fixes"][0]["needs"] == [{"core": "two", "item_id": "pgLegacy:two"}]
+
+
 async def test_source_url_built_from_repo(session):
     """source_url is constructed from the Repo row for source_core."""
     session.add(Repo(full_name="mangosthree/server", core="three",

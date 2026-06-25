@@ -219,6 +219,14 @@ async def build_port_candidates(session: AsyncSession) -> dict:
     return {"summary": {"total": len(cands), "tiers": tiers}, "columns": columns}
 
 
+def _na_reason(v: "PortVerdict") -> str:
+    """Why a row was demoted to N/A — the symbol-precondition detail if present."""
+    for d in (v.state_evidence or []):
+        if "required symbol" in d:
+            return d
+    return "code not present"
+
+
 def _review_reason(v: "PortVerdict") -> str:
     if v.apply_result == "conflict" and v.conflict_total:
         b = closeness_label(v.conflict_applied, v.conflict_total)
@@ -237,8 +245,11 @@ async def build_port_verdicts(session: AsyncSession) -> dict:
 
     One card per fix that has >=1 needs|review core; each card lists which cores
     need it (claimable), should be reviewed (claimable, with closeness), already
-    have it, or can't use it. REVIEW is ranked near->partial->far. Truthful by
-    construction: it never re-grades a verdict, only groups them.
+    have it, or can't use it. REVIEW is ranked near->partial->far.
+
+    Gated on the portability classifier: a needs/review row the symbol-precondition
+    gate proved NOT_APPLICABLE is demoted to N/A (kept visible, never ready-to-port).
+    Truthful by construction: it never re-grades, only groups + applies that gate.
     """
     repos = await _source_repos(session)
     rows = list(await session.scalars(select(PortVerdict)))
@@ -265,7 +276,14 @@ async def build_port_verdicts(session: AsyncSession) -> dict:
         needs, review, na, has_it = [], [], [], []
         for v in sorted(vs, key=lambda v: (_CORE_ORDER.get(v.core, 99), v.core)):
             item_id = f"{pg_id}:{v.core}"
-            if v.verdict == "needs":
+            # Feed gated on the portability classifier: a needs/review row the
+            # symbol-precondition gate proved NOT_APPLICABLE (e.g. #229 applies cleanly
+            # but the target lacks `loc`) is demoted to the N/A sibling bucket with its
+            # reason — never shown as ready-to-port. Strictly subtractive: rows with no
+            # classifier state (legacy) keep their verdict-based bucket.
+            if v.state == "not_applicable" and v.verdict in ("needs", "review"):
+                na.append({"core": v.core, "reason": _na_reason(v)})
+            elif v.verdict == "needs":
                 needs.append({"core": v.core, "item_id": item_id})
             elif v.verdict == "review":
                 entry: dict = {"core": v.core, "item_id": item_id,

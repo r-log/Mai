@@ -168,21 +168,21 @@ Shipped, tested (328 passed incl. real-mirror golden):
 - Acceptance: `evaluate(#229, {zero,one,two}) == NOT_APPLICABLE` (names `loc`), positive
   control `== PORTABLE`. Real verdict objects pasted in the session report.
 
-## THE SWITCH — deliberately NOT flipped (final reviewable change)
+## THE SWITCH — FLIPPED (build_port_verdicts now gated on the classifier)
 
-The live "Ready to port" feed still reads `verdict`. To make it consume the classifier,
-change ONE place — `build_port_verdicts` in `src/mai/publish/dataviz.py` (~line 268):
+`build_port_verdicts` (`src/mai/publish/dataviz.py`) now post-filters its own output by
+`PortVerdict.state`: a `needs`/`review` row the symbol gate proved `not_applicable` is
+demoted to the **N/A** sibling bucket (kept visible, with the missing-symbol reason) and
+never appears in the ready-to-port lane. Implemented as an **intersection, not a
+replacement**: the relevance gate still lives in the legacy `verdict` (so client_bound /
+expansion stay out of `needs`), and the classifier only *removes* — post-flip ready ⊆
+pre-flip ready, zero new entries. `reconcile_board` auto-follows (it derives its actionable
+set from this output), so a demoted row's BoardItem archives correctly.
 
-```
-# now:        if v.verdict == "needs":  needs.append(...)
-# flip to:    state == "portable" -> the only "ready to port"; route
-#             "adaptable" / "not_applicable" / "already_present" to sibling buckets
-#             (audit false negatives too); show none silently.
-```
-
-`reconcile_board` (refresh/cycle.py) currently archives off `needs|review` — flip it to the
-new actionable set (`portable`+`adaptable`) in the same change. Until then the classifier is
-pure shadow data: computed, stored, evidenced, consumed by nothing. Flip only after review.
+`state is None` (legacy rows) → no demotion, so the flip is backward-safe and inert until
+data is refreshed. **To make it live on real data:** `mai sync-analyze` (the `gate_version`
+bump invalidates every cached verdict → recomputes `state`), then `mai publish`. Until that
+run, the live `mai.db` rows have `state=NULL` and the feed behaves exactly as before.
 
 ## Out-of-scope seams (TODO markers in `classifier.py`)
 
