@@ -1,0 +1,3 @@
+# Keep EOL-sensitive test fixtures (unified-diff patches, C++ snapshots) as LF on all
+# platforms so the portability-classifier tests are byte-reproducible cross-OS.
+tests/fixtures/** text eol=lf
