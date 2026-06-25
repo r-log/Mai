@@ -15,6 +15,7 @@ class GitClient(Protocol):
     async def fetch(self, core: str) -> None: ...
     async def new_commits(self, core: str, since_sha: str | None) -> list[CommitMeta]: ...
     async def diff(self, core: str, sha: str) -> str: ...
+    async def read_file(self, core: str, ref: str, path: str) -> str | None: ...
     async def paths_exist(self, core: str, paths: list[str]) -> dict[str, bool]: ...
     async def ensure_worktree(self, core: str) -> str: ...
     async def apply_check(self, core: str, patch_text: str, *,
@@ -143,6 +144,12 @@ class LocalGitClient:
     async def diff(self, core: str, sha: str) -> str:
         """The commit's unified patch (same diff that feeds patch-id)."""
         return await self._git(core, "diff-tree", "--root", "-p", "-M", sha)
+
+    async def read_file(self, core: str, ref: str, path: str) -> str | None:
+        """The text of a blob at `ref:path`, or None if it does not exist there."""
+        rc, out, _ = await self._run_raw(
+            ["-C", str(self._path(core)), "show", f"{ref}:{path}"])
+        return out if rc == 0 else None
 
     async def paths_exist(self, core: str, paths: list[str]) -> dict[str, bool]:
         """Whether each path exists in the core's HEAD tree.

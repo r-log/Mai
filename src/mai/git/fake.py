@@ -9,13 +9,15 @@ class FakeGitClient:
                  paths: dict[str, list[str]] | None = None,
                  apply_results: dict[tuple[str, str, bool], str] | None = None,
                  head_shas: dict[str, str] | None = None,
-                 fractions: dict[tuple[str, str], tuple[int, int]] | None = None):
+                 fractions: dict[tuple[str, str], tuple[int, int]] | None = None,
+                 files: dict[tuple[str, str, str], str] | None = None):
         self._commits = commits or {}
         self._diffs = diffs or {}
         self._paths = paths or {}
         self._apply = apply_results or {}
         self._heads = head_shas or {}
         self._fractions = fractions or {}
+        self._files = files or {}
 
     async def ensure_mirror(self, core: str, url: str) -> None:
         return None
@@ -34,6 +36,9 @@ class FakeGitClient:
 
     async def diff(self, core: str, sha: str) -> str:
         return self._diffs.get((core, sha), "")
+
+    async def read_file(self, core: str, ref: str, path: str) -> str | None:
+        return self._files.get((core, ref, path))
 
     async def paths_exist(self, core: str, paths: list[str]) -> dict[str, bool]:
         have = set(self._paths.get(core, []))
