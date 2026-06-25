@@ -1,8 +1,13 @@
+from pathlib import Path
+
 from mai.db.models import (Commit, CommitFile, CommitPatch, PatchGroup,
                            Propagation, SubsystemClass)
 from mai.git.fake import FakeGitClient
+from mai.portability.types import GATE_SUITE_VERSION
 from mai.repository.port_verdict import PortVerdictRepository
 from mai.sync.verdicts import compute_verdicts
+
+_FIX = Path(__file__).parent / "fixtures"
 
 
 async def _fix(session, *, pg_id, source_core, source_sha, subsystem, classification,
@@ -129,6 +134,61 @@ async def test_two_fixes_do_not_cross_contaminate(session):
     # each fix must have exactly one verdict — no contamination from the other's propagation
     assert len(await repo.for_fix("pgA")) == 1
     assert len(await repo.for_fix("pgB")) == 1
+
+
+async def test_state_column_populated_additively(session):
+    await _fix(session, pg_id="pgS", source_core="three", source_sha="sS",
+               subsystem="src/shared/Db", classification="shared",
+               present_cores=["three"], absent_cores=["two"])
+    await session.commit()
+    fake = FakeGitClient(diffs={("three", "sS"): "PATCH"},
+                         paths={"two": ["src/shared/Db/x.cpp"]})
+    await compute_verdicts(session, fake)
+    v = await PortVerdictRepository(session).get("pgS", "two")
+    assert v.verdict == "needs"                 # legacy field unchanged
+    assert v.state == "portable"                # additive classifier state
+    assert v.gate_version == GATE_SUITE_VERSION
+
+
+async def test_229_state_diverges_from_legacy_needs(session):
+    """The whole point: legacy `verdict` stays 'needs' (false positive), but the
+    additive `state` is NOT_APPLICABLE because `loc` is absent in the target. The feed
+    (which reads `verdict`) is untouched; the truth is recorded in `state`."""
+    pr229 = (_FIX / "pr229.patch").read_text(encoding="utf-8")
+    three = (_FIX / "dbcfileloader_three_229.cpp").read_text(encoding="utf-8")
+    zero = (_FIX / "dbcfileloader_zero.cpp").read_text(encoding="utf-8")
+    path = "src/shared/DataStores/DBCFileLoader.cpp"
+
+    session.add(PatchGroup(id="pg229", patch_id="patch-229"))
+    session.add(SubsystemClass(subsystem="src/shared/DataStores",
+                               classification="shared", source="heuristic"))
+    session.add(Propagation(patch_group_id="pg229", core="three", present=True,
+                            source_sha="229"))
+    session.add(Propagation(patch_group_id="pg229", core="zero", present=False,
+                            source_sha=None))
+    commit = Commit(core="three", sha="229", author="a", authored_at="t",
+                    committer="a", committed_at="t", message="DBC fix",
+                    parent_shas=["p"], is_merge=False)
+    session.add(commit)
+    await session.flush()
+    session.add(CommitFile(commit_id=commit.id, path=path, change_type="M",
+                           added_lines=6, removed_lines=2,
+                           subsystem="src/shared/DataStores"))
+    await session.commit()
+
+    fake = FakeGitClient(
+        diffs={("three", "229"): pr229},
+        paths={"zero": [path]},                       # file exists -> not file_absent
+        head_shas={"zero": "H"},
+        files={("three", "229", path): three, ("zero", "H", path): zero})
+    # default forward apply -> "clean": the textual trap that fools the legacy gate
+    await compute_verdicts(session, fake)
+
+    v = await PortVerdictRepository(session).get("pg229", "zero")
+    assert v.verdict == "needs"              # legacy false positive (clean + shared)
+    assert v.apply_result == "clean"
+    assert v.state == "not_applicable"       # classifier catches it
+    assert any("loc" in d for d in v.state_evidence)
 
 
 async def test_one_failing_core_does_not_abort_batch(session):

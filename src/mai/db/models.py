@@ -346,6 +346,11 @@ class PortVerdict(Base):
     conflict_applied: Mapped[int | None] = mapped_column(Integer, nullable=True)
     conflict_total: Mapped[int | None] = mapped_column(Integer, nullable=True)
     evidence: Mapped[list] = mapped_column(JSON, default=list)
+    # Additive portability-classifier output (Phase 1). The feed still reads `verdict`;
+    # `state` is the evidence-based classification that will gate it once flipped on.
+    state: Mapped[str | None] = mapped_column(String(20), nullable=True)  # State enum value
+    state_evidence: Mapped[list] = mapped_column(JSON, default=list)      # gate trail
+    gate_version: Mapped[str | None] = mapped_column(String(16), nullable=True)
     computed_at: Mapped[datetime] = mapped_column(default=_now, onupdate=_now)
 
     __table_args__ = (

@@ -4,6 +4,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from mai.db.models import Commit, CommitFile, Propagation
+from mai.portability.classifier import classify_from_apply
+from mai.portability.types import GATE_SUITE_VERSION
 from mai.repository.port_candidate import magnitude_tier
 from mai.repository.port_verdict import PortVerdictRepository
 from mai.repository.subsystem_class import SubsystemClassRepository
@@ -79,7 +81,8 @@ async def compute_verdicts(session: AsyncSession, git_client) -> dict:
                 base = head_cache[target_core]
                 existing = await vrepo.get(pg_id, target_core)
                 if (existing is not None and existing.source_sha == source_sha
-                        and existing.base_sha == base):
+                        and existing.base_sha == base
+                        and existing.gate_version == GATE_SUITE_VERSION):
                     counts["cached"] += 1
                     counts[existing.verdict] = counts.get(existing.verdict, 0) + 1
                     continue
@@ -100,6 +103,15 @@ async def compute_verdicts(session: AsyncSession, git_client) -> dict:
                     else:
                         verdict = "review"
 
+                # Additive: the evidence-based portability state (Phase 1). Reuses the
+                # apply_result above, so the only added cost is Gate 3's symbol reads on
+                # clean/conflict pairs. The feed still reads `verdict`; `state` is stored
+                # for the (separately reviewable) feed-flip.
+                sv = await classify_from_apply(
+                    git_client, patch=patch, apply_result=apply_result,
+                    source_core=source_core, source_sha=source_sha,
+                    target_core=target_core, target_head=base)
+
                 confidence = "high" if verdict in ("needs", "has_it") else "medium"
                 evidence = [f"source {source_core}@{source_sha}",
                             f"apply {apply_result}", f"relevance {relevance} ({rep})",
@@ -117,9 +129,13 @@ async def compute_verdicts(session: AsyncSession, git_client) -> dict:
                     base_sha=base, subsystem=rep, magnitude=magnitude,
                     tier=magnitude_tier(magnitude), confidence=confidence,
                     similar_commit=None, evidence=evidence,
-                    conflict_applied=conflict_applied, conflict_total=conflict_total)
+                    conflict_applied=conflict_applied, conflict_total=conflict_total,
+                    state=sv.state.value, gate_version=GATE_SUITE_VERSION,
+                    state_evidence=[e.detail for e in sv.evidence])
                 counts["recomputed"] += 1
                 counts[verdict] = counts.get(verdict, 0) + 1
+                counts["state:" + sv.state.value] = counts.get(
+                    "state:" + sv.state.value, 0) + 1
             except Exception:  # noqa: BLE001 - batch derivation; record + continue
                 counts["errors"] += 1
                 continue
