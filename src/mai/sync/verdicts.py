@@ -110,7 +110,7 @@ async def compute_verdicts(session: AsyncSession, git_client) -> dict:
                 sv = await classify_from_apply(
                     git_client, patch=patch, apply_result=apply_result,
                     source_core=source_core, source_sha=source_sha,
-                    target_core=target_core, target_head=base)
+                    target_core=target_core, target_head=base, session=session)
 
                 confidence = "high" if verdict in ("needs", "has_it") else "medium"
                 evidence = [f"source {source_core}@{source_sha}",

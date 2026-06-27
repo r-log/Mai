@@ -21,8 +21,7 @@ Out of scope (Phase 1) — left as seams, not built:
 """
 from __future__ import annotations
 
-from mai.codememory.index import FileIndex
-from mai.cppindex import extract
+from mai.codememory.index import get_file_index
 from mai.portability.patch import parse_patch
 from mai.portability.symbols import missing_in_file
 from mai.portability.types import Evidence, GATE_SUITE_VERSION, State, Verdict
@@ -57,7 +56,7 @@ async def evaluate(
     return await classify_from_apply(
         git_client, patch=patch, apply_result=apply_result,
         source_core=source_core, source_sha=source_sha,
-        target_core=target_core, target_head=target_head)
+        target_core=target_core, target_head=target_head, session=None)
 
 
 async def classify_from_apply(
@@ -69,6 +68,7 @@ async def classify_from_apply(
     source_sha: str,
     target_core: str,
     target_head: str,
+    session=None,
 ) -> Verdict:
     """Gates 2→3 given an already-computed apply outcome (`reverse_clean`, `clean`,
     `conflict`, or `file_absent`). Shared by `evaluate` and by `compute_verdicts`, so
@@ -96,16 +96,7 @@ async def classify_from_apply(
         source_text = await git_client.read_file(source_core, source_sha, path)
         if source_text is None:
             continue
-        target_text = await git_client.read_file(target_core, target_head, path)
-        if target_text is not None:
-            tgt_b = target_text.encode("utf-8", "replace")
-            target_index = FileIndex(
-                exists=True,
-                file_symbols=extract.file_symbols(tgt_b),
-                functions=extract.functions(tgt_b),
-            )
-        else:
-            target_index = FileIndex(exists=False)
+        target_index = await get_file_index(session, git_client, target_core, target_head, path)
         for ms in missing_in_file(
                 source_bytes=source_text.encode("utf-8", "replace"),
                 target_index=target_index,
