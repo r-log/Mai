@@ -85,3 +85,11 @@ async def test_fake_judge_records_model_and_counts_calls():
     op = await fake.judge({"x": 1}, "anthropic/sonnet")
     assert isinstance(op, ReviewOpinion)
     assert fake.calls == 1 and fake.last_model == "anthropic/sonnet"
+
+
+def test_build_prompt_not_truncated_below_large_routing():
+    from mai.judge.prompt import build_prompt
+    # evidence larger than the 24000 routing threshold (would route to the large model)
+    big = {"conflict": {"hunks": [{"patch_text": "Z" * 50000, "target_context": ""}]}}
+    out = build_prompt(big)
+    assert len(out) > 40000   # NOT cut down to the old 24000 cap

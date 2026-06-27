@@ -27,7 +27,7 @@ def _cites(text: str, tokens: set[str]) -> bool:
     return any(tok and tok in text for tok in tokens)
 
 
-def ground_opinion(opinion: ReviewOpinion, evidence: dict) -> ReviewOpinion:
+def ground_opinion(opinion: ReviewOpinion, evidence: dict) -> ReviewOpinion:  # note: assessment+reason are labeled opinion, not grounded
     """Drop every claim not grounded in the evidence; discount confidence by the
     grounded fraction. All-ungrounded -> uncertain/0 with a manual-review note."""
     tokens = _evidence_tokens(evidence)

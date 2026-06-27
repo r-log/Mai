@@ -34,6 +34,7 @@ class Settings(BaseSettings):
     review_model_large: str = "google/gemini-2.5-pro"
     review_hunk_routing_threshold: int = 8
     review_large_context_chars: int = 24000
+    review_prompt_cap_chars: int = 200000
 
 
 settings = Settings()

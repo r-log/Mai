@@ -1,6 +1,8 @@
 # src/mai/judge/prompt.py
 import json
 
+from mai.config import settings
+
 PROMPT_VERSION = 1
 
 SYSTEM_PROMPT = (
@@ -19,10 +21,8 @@ SYSTEM_PROMPT = (
     "citations (list of strings)."
 )
 
-_CAP = 24000
-
-
 def build_prompt(evidence: dict) -> str:
-    """Render the evidence packet compactly for the judge (capped)."""
-    blob = json.dumps(evidence, separators=(",", ":"))[:_CAP]
+    """Render the evidence packet compactly for the judge (capped at
+    settings.review_prompt_cap_chars so large-context routing isn't defeated)."""
+    blob = json.dumps(evidence, separators=(",", ":"))[:settings.review_prompt_cap_chars]
     return "Review evidence (JSON):\n" + blob + "\n\nReturn the JSON opinion object."
