@@ -171,7 +171,11 @@ async def test_review_api_includes_opinion_when_judge_injected(client_factory):
     assert body["opinion"]["assessment"] == "divergent"
 
 
-async def test_review_api_opinion_null_without_judge(client_factory):
+async def test_review_api_opinion_null_without_judge(client_factory, monkeypatch):
+    # With no injected judge and the advisor disabled, _default_judge() returns None
+    # -> opinion null. Pin the flag off so the test is independent of the ambient .env.
+    from mai.config import settings
+    monkeypatch.setattr(settings, "review_advisor_enabled", False)
     app_client = await client_factory(review_judge=None)
     resp = await app_client.get("/api/review/pg1:four")
     assert resp.status_code == 200
