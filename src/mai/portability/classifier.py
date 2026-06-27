@@ -21,6 +21,8 @@ Out of scope (Phase 1) — left as seams, not built:
 """
 from __future__ import annotations
 
+from mai.codememory.index import FileIndex
+from mai.cppindex import extract
 from mai.portability.patch import parse_patch
 from mai.portability.symbols import missing_in_file
 from mai.portability.types import Evidence, GATE_SUITE_VERSION, State, Verdict
@@ -95,11 +97,18 @@ async def classify_from_apply(
         if source_text is None:
             continue
         target_text = await git_client.read_file(target_core, target_head, path)
-        target_bytes = (target_text.encode("utf-8", "replace")
-                        if target_text is not None else None)
+        if target_text is not None:
+            tgt_b = target_text.encode("utf-8", "replace")
+            target_index = FileIndex(
+                exists=True,
+                file_symbols=extract.file_symbols(tgt_b),
+                functions=extract.functions(tgt_b),
+            )
+        else:
+            target_index = FileIndex(exists=False)
         for ms in missing_in_file(
                 source_bytes=source_text.encode("utf-8", "replace"),
-                target_bytes=target_bytes,
+                target_index=target_index,
                 added_lines=fp.added_lines):
             missing.append(f"{path}: required symbol {ms.detail}")
 

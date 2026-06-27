@@ -17,6 +17,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from mai.cppindex import extract
+from mai.codememory.index import FileIndex
 
 
 @dataclass
@@ -32,16 +33,16 @@ def _resolves(name: str, scope: set[str], file_syms: set[str]) -> bool:
 def missing_in_file(
     *,
     source_bytes: bytes,
-    target_bytes: bytes | None,
+    target_index: "FileIndex | None",
     added_lines: set[int],
     enclosing_name: str | None = None,
 ) -> list[MissingSymbol]:
     """Precondition symbols the target lacks for one touched C++ file.
 
-    `source_bytes` is the file at the source commit (post-image); `target_bytes` is
-    the file at the target HEAD, or None if it does not exist there.
+    `source_bytes` is the file at the source commit (post-image); `target_index` is
+    the pre-built FileIndex for the target HEAD, or None if it does not exist there.
     """
-    if target_bytes is None:
+    if target_index is None or not target_index.exists:
         # No file to host the change at all -> every referenced symbol is moot; the
         # caller treats a missing file as file_absent. Return empty so the apply
         # router owns that case.
@@ -65,11 +66,11 @@ def missing_in_file(
     if not candidates:
         return []
 
-    tgt_fn = (extract.find_function(target_bytes, src_fn.name) if src_fn
-              else (extract.find_function(target_bytes, enclosing_name)
+    tgt_fn = (target_index.find_function(src_fn.name) if src_fn
+              else (target_index.find_function(enclosing_name)
                     if enclosing_name else None))
     tgt_scope = tgt_fn.scope_names if tgt_fn else set()
-    tgt_syms = extract.file_symbols(target_bytes)
+    tgt_syms = target_index.file_symbols
 
     missing: list[MissingSymbol] = []
     for name in sorted(candidates):
