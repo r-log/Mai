@@ -356,3 +356,29 @@ class PortVerdict(Base):
     __table_args__ = (
         UniqueConstraint("patch_group_id", "core", name="uq_port_verdict"),
     )
+
+
+class ReviewAdvice(Base):
+    """Cache of the grounded review opinion for one (fix, core). Derived & recomputable:
+    keyed on (source_sha, base_sha, model, prompt_version); recomputed when any changes.
+    Cache-only — safe to drop/rebuild."""
+    __tablename__ = "review_advice"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    patch_group_id: Mapped[str] = mapped_column(String(36))
+    core: Mapped[str] = mapped_column(String(64))
+    source_sha: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    base_sha: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    model: Mapped[str] = mapped_column(String(128))
+    prompt_version: Mapped[int] = mapped_column(Integer, default=0)
+    assessment: Mapped[str] = mapped_column(String(20))
+    confidence: Mapped[float] = mapped_column(Float, default=0.0)
+    reason: Mapped[str] = mapped_column(Text, default="")
+    tips: Mapped[list] = mapped_column(JSON, default=list)
+    citations: Mapped[list] = mapped_column(JSON, default=list)
+    adapted_hunks: Mapped[list] = mapped_column(JSON, default=list)
+    grounded: Mapped[bool] = mapped_column(Boolean, default=True)
+    computed_at: Mapped[datetime] = mapped_column(default=_now, onupdate=_now)
+
+    __table_args__ = (
+        UniqueConstraint("patch_group_id", "core", name="uq_review_advice"),
+    )
