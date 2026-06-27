@@ -185,6 +185,23 @@ function hunkBlock(h) {
   return `<div class="${cls}"><div class="rev-hh">${h.applied ? "✓ applies" : "✗ rejects"} · ${esc(h.path)}</div>
     <pre>${esc(h.patch_text)}</pre>${tgt}</div>`;
 }
+function renderAdvice(op) {
+  if (!op) return "";
+  const pct = Math.round((op.confidence || 0) * 100);
+  const tips = (op.tips || []).map(t => `<li>${esc(t)}</li>`).join("");
+  const hunks = (op.adapted_hunks || []).map(h =>
+    `<div class="rev-op-hunk"><code>${esc(h.path)}</code> ${esc(h.suggestion)}</div>`).join("");
+  return `<div class="rev-op rev-op-${esc(op.assessment)}">
+    <div class="rev-op-head">
+      <span class="rev-op-badge">${esc(op.assessment)}</span>
+      <span class="rev-op-conf">grounded confidence ${pct}%</span>
+    </div>
+    <div class="rev-op-reason">${esc(op.reason || "")}</div>
+    ${tips ? `<ul class="rev-op-tips">${tips}</ul>` : ""}
+    ${hunks}
+  </div>`;
+}
+
 function renderEvidence(ev) {
   const f = ev.fix, c = ev.conflict;
   const sim = ev.similar.length
@@ -276,7 +293,8 @@ document.addEventListener("click", (e) => {
     fetch(`/api/review/${encodeURIComponent(row.dataset.id)}`)
       .then(r => r.json()).then(j => {
         proof.dataset.loaded = "1";
-        proof.innerHTML = j.evidence ? renderEvidence(j.evidence)
+        proof.innerHTML = j.evidence
+          ? (renderAdvice(j.opinion) + renderEvidence(j.evidence))
           : "<div class='rev-load'>no evidence (not a review item)</div>";
       })
       .catch(() => {

@@ -120,6 +120,26 @@ a { color:var(--accent); text-decoration:none; }
 .rev-sim code { font-size:10px; background:#eaeef2; padding:0 4px; border-radius:3px; }
 .rev-d { color:var(--muted); margin-left:4px; }
 
+/* review opinion panel (rendered above evidence) */
+.rev-op { border:1px solid var(--line); border-radius:6px; padding:8px 10px;
+  margin-bottom:10px; background:#fff; }
+.rev-op-portable    { border-left:3px solid var(--green); }
+.rev-op-already_handled { border-left:3px solid var(--accent); }
+.rev-op-divergent   { border-left:3px solid var(--amber); }
+.rev-op-uncertain   { border-left:3px solid #8c959f; }
+.rev-op-head { display:flex; align-items:center; gap:10px; margin-bottom:5px; }
+.rev-op-badge { font-size:11px; font-weight:700; padding:1px 7px; border-radius:20px; }
+.rev-op-portable .rev-op-badge    { background:var(--green-bg); color:var(--green); }
+.rev-op-already_handled .rev-op-badge { background:#ddf4ff; color:#0a3069; }
+.rev-op-divergent .rev-op-badge   { background:var(--amber-bg); color:var(--amber); }
+.rev-op-uncertain .rev-op-badge   { background:#eaeef2; color:var(--muted); }
+.rev-op-conf { font-size:11px; color:var(--muted); }
+.rev-op-reason { font-size:12px; line-height:1.5; }
+.rev-op-tips { margin:5px 0 0; padding-left:18px; font-size:12px; line-height:1.5; }
+.rev-op-hunk { margin-top:5px; font-size:12px; line-height:1.5; color:var(--muted); }
+.rev-op-hunk code { font-family:ui-monospace,SFMono-Regular,monospace; font-size:11px;
+  background:#eaeef2; padding:0 4px; border-radius:3px; color:#1f2328; }
+
 .cc-far { margin-top:6px; }
 .cc-fartoggle { background:none; border:none; color:var(--muted); cursor:pointer;
   font-size:12px; padding:6px 0; }
