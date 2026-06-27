@@ -35,6 +35,7 @@ class Settings(BaseSettings):
     review_hunk_routing_threshold: int = 8
     review_large_context_chars: int = 24000
     review_prompt_cap_chars: int = 200000
+    review_timeout_seconds: float = 120.0
 
 
 settings = Settings()

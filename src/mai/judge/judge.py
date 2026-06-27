@@ -3,6 +3,7 @@ from typing import Protocol
 
 import httpx
 
+from mai.config import settings
 from mai.judge.prompt import SYSTEM_PROMPT, build_prompt
 from mai.judge.schema import ReviewOpinion, ReviewOpinionSchemaError, parse_opinion
 
@@ -30,7 +31,10 @@ class OpenRouterJudge:
     def __init__(self, api_key: str, base_url: str = "https://openrouter.ai/api",
                  client: httpx.AsyncClient | None = None):
         self._base = base_url.rstrip("/")
-        self._client = client or httpx.AsyncClient()
+        # httpx defaults to a 5s timeout — far too short for LLM latency, especially
+        # the large-context model on a big prompt. Use a generous configurable one.
+        self._client = client or httpx.AsyncClient(
+            timeout=settings.review_timeout_seconds)
         self._headers = {
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",

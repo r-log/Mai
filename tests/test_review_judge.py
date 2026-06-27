@@ -80,6 +80,12 @@ async def test_openrouter_judge_raises_on_non_json_body():
             await judge.judge({"fix": {}, "conflict": {"hunks": []}}, "some/model")
 
 
+def test_openrouter_judge_default_client_has_generous_timeout():
+    # httpx defaults to 5s, which times out on real LLM latency (esp. the large model).
+    j = OpenRouterJudge("or-key")
+    assert j._client.timeout.read is not None and j._client.timeout.read >= 60
+
+
 async def test_fake_judge_records_model_and_counts_calls():
     fake = FakeJudge()
     op = await fake.judge({"x": 1}, "anthropic/sonnet")
