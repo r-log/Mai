@@ -129,6 +129,18 @@ async def _commits_harvest() -> int:
     return total
 
 
+async def _warm_advice(limit: int, concurrency: int):
+    from mai.db.session import SessionFactory
+    from mai.git.client import LocalGitClient
+    from mai.orchestrate.warm import warm_advice
+    if not settings.openrouter_api_key:
+        return None
+    from mai.judge.judge import OpenRouterJudge
+    judge = OpenRouterJudge(settings.openrouter_api_key, settings.openrouter_api_url)
+    git = LocalGitClient(settings.git_mirror_dir, settings.git_worktree_dir)
+    return await warm_advice(SessionFactory, git, judge, limit=limit, concurrency=concurrency)
+
+
 async def _sync_analyze() -> dict:
     from mai.git.client import LocalGitClient
     from mai.sync.classify import classify_subsystems
@@ -236,6 +248,9 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("drift")
     sub.add_parser("commits-harvest")
     sub.add_parser("sync-analyze")
+    wa = sub.add_parser("warm-advice")
+    wa.add_argument("--limit", type=int, default=200)
+    wa.add_argument("--concurrency", type=int, default=4)
     sub.add_parser("refresh")
     sub.add_parser("serve")
     ua = sub.add_parser("user-add")
@@ -298,6 +313,13 @@ def main() -> None:
         print(f"verdicts: needs={v['needs']} review={v['review']} "
               f"n/a={v['not_applicable']} has_it={v['has_it']} "
               f"(recomputed={v['recomputed']} cached={v['cached']})")
+    elif args.cmd == "warm-advice":
+        result = asyncio.run(_warm_advice(args.limit, args.concurrency))
+        if result is None:
+            print("warm-advice: no OPENROUTER_API_KEY set — nothing warmed")
+        else:
+            print(f"warm-advice: planned={result['planned']} "
+                  f"warmed={result['warmed']} failed={result['failed']}")
     elif args.cmd == "refresh":
         result = asyncio.run(_refresh())
         print(f"refresh: +{result.new_commits} commits, "
