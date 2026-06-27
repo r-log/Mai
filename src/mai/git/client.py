@@ -50,9 +50,16 @@ class LocalGitClient:
         self._configured: set[str] = set()   # core.autocrlf/fsmonitor set once
         self._head: dict[str, str] = {}       # cached HEAD per core
         self._dirty: set[str] = set()         # cores whose worktree needs reset
+        self._wt_locks: dict[str, asyncio.Lock] = {}  # per-core worktree mutual exclusion
 
     def _path(self, core: str) -> Path:
         return self._root / f"{core}.git"
+
+    def _wt_lock(self, core: str) -> asyncio.Lock:
+        # Lazily create one Lock per core. setdefault is safe under asyncio (no await
+        # between the get and set). Serializes the ensure_worktree -> apply --reject ->
+        # read .rej span so concurrent workers on the same core can't corrupt it.
+        return self._wt_locks.setdefault(core, asyncio.Lock())
 
     async def _run_raw(self, args: list[str], *,
                        stdin: bytes | None = None) -> tuple[int, str, str]:
@@ -223,18 +230,19 @@ class LocalGitClient:
         Returns 'clean' | 'reverse_clean' | 'conflict' | 'file_absent'. Never raises
         on a non-applying patch — the result is the signal.
         """
-        wt = await self.ensure_worktree(core)
-        args = ["-C", wt, "apply", "--check"]
-        if reverse:
-            args.append("--reverse")
-        args.append("-")
-        rc, _, err = await self._run_raw(args, stdin=patch_text.encode("utf-8", "replace"))
-        if rc == 0:
-            return "reverse_clean" if reverse else "clean"
-        low = err.lower()
-        if "no such file" in low or "does not exist" in low:
-            return "file_absent"
-        return "conflict"
+        async with self._wt_lock(core):
+            wt = await self.ensure_worktree(core)
+            args = ["-C", wt, "apply", "--check"]
+            if reverse:
+                args.append("--reverse")
+            args.append("-")
+            rc, _, err = await self._run_raw(args, stdin=patch_text.encode("utf-8", "replace"))
+            if rc == 0:
+                return "reverse_clean" if reverse else "clean"
+            low = err.lower()
+            if "no such file" in low or "does not exist" in low:
+                return "file_absent"
+            return "conflict"
 
     async def head_sha(self, core: str) -> str:
         return (await self._git(core, "rev-parse", "HEAD")).strip()
@@ -250,33 +258,35 @@ class LocalGitClient:
         total = sum(1 for ln in patch_text.splitlines() if ln.startswith("@@ "))
         if total == 0:
             return (0, 0)
-        wt = await self.ensure_worktree(core)
-        await self._run_raw(["-C", wt, "apply", "--reject", "-"],
-                            stdin=patch_text.encode("utf-8", "replace"))
-        # `--reject` writes clean hunks + .rej files into the tree: it is now dirty,
-        # so the next ensure_worktree for this core must reset before reuse.
-        self._dirty.add(core)
-        rejected = 0
-        for p in paths:
-            rej = Path(wt) / (p + ".rej")
-            if rej.exists():
-                rejected += sum(1 for ln in rej.read_text("utf-8", "replace").splitlines()
-                                if ln.startswith("@@ "))
-        return (max(0, total - rejected), total)
+        async with self._wt_lock(core):
+            wt = await self.ensure_worktree(core)
+            await self._run_raw(["-C", wt, "apply", "--reject", "-"],
+                                stdin=patch_text.encode("utf-8", "replace"))
+            # `--reject` writes clean hunks + .rej files into the tree: it is now dirty,
+            # so the next ensure_worktree for this core must reset before reuse.
+            self._dirty.add(core)
+            rejected = 0
+            for p in paths:
+                rej = Path(wt) / (p + ".rej")
+                if rej.exists():
+                    rejected += sum(1 for ln in rej.read_text("utf-8", "replace").splitlines()
+                                    if ln.startswith("@@ "))
+            return (max(0, total - rejected), total)
 
     async def rejected_hunks(self, core: str, patch_text: str,
                              paths: list[str]) -> dict[str, str]:
         """Apply the patch with --reject; return {path: rej_text} (the hunks git
         could not place). Dirties the worktree (next ensure_worktree resets)."""
-        wt = await self.ensure_worktree(core)
-        await self._run_raw(["-C", wt, "apply", "--reject", "-"],
-                            stdin=patch_text.encode("utf-8", "replace"))
-        self._dirty.add(core)
-        out: dict[str, str] = {}
-        for p in paths:
-            rej = Path(wt) / (p + ".rej")
-            out[p] = rej.read_text("utf-8", "replace") if rej.exists() else ""
-        return out
+        async with self._wt_lock(core):
+            wt = await self.ensure_worktree(core)
+            await self._run_raw(["-C", wt, "apply", "--reject", "-"],
+                                stdin=patch_text.encode("utf-8", "replace"))
+            self._dirty.add(core)
+            out: dict[str, str] = {}
+            for p in paths:
+                rej = Path(wt) / (p + ".rej")
+                out[p] = rej.read_text("utf-8", "replace") if rej.exists() else ""
+            return out
 
     async def read_region(self, core: str, path: str, start: int, end: int) -> str:
         """Lines [start, end] (1-based inclusive) of HEAD:path; '' if absent."""
