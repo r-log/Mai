@@ -3,9 +3,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from mai.config import settings as _settings
-from mai.db.models import Commit, CommitFile, PortVerdict
+from mai.db.models import Commit, CommitFile, PortVerdict, ReviewAdvice
 from mai.judge.ground import ground_opinion
 from mai.judge.judge import choose_model
+from mai.judge.prompt import PROMPT_VERSION
 from mai.sync.verdicts import closeness_label
 
 _HUNK_RE = re.compile(r"^@@ -(\d+)(?:,(\d+))? \+\d+(?:,\d+)? @@", re.M)
@@ -148,17 +149,49 @@ def _split_rej(rej_text: str) -> list[str]:
     return parts
 
 
+def _opinion_from_row(row: ReviewAdvice) -> dict:
+    return {"assessment": row.assessment, "confidence": row.confidence,
+            "reason": row.reason, "tips": row.tips, "citations": row.citations,
+            "adapted_hunks": row.adapted_hunks}
+
+
 async def build_review_advice(session, git_client, judge, item_id, *, settings=_settings):
-    """Collect evidence (P1), then — only for a real review item and only when a judge
-    is provided — get a grounded LLM opinion. Any judge failure degrades to opinion=None;
-    the evidence is always returned. Invariant 1: non-review -> evidence None, no judge call."""
+    """Collect evidence (P1); for a review item with a judge, return the cached grounded
+    opinion on an exact-key hit, else compute -> ground -> upsert. Judge failures are not
+    cached. Invariant 1: non-review -> evidence None, no judge, no cache."""
     evidence = await build_review_evidence(session, git_client, item_id)
     if evidence is None or judge is None:
         return {"evidence": evidence, "opinion": None}
+
+    pg_id, _, core = item_id.rpartition(":")
+    source_sha = (evidence.get("fix") or {}).get("source_sha")
+    base_sha = await git_client.head_sha(core)
+    model = choose_model(evidence, settings)
+
+    row = await session.scalar(select(ReviewAdvice).where(
+        ReviewAdvice.patch_group_id == pg_id, ReviewAdvice.core == core))
+    if (row is not None and row.source_sha == source_sha and row.base_sha == base_sha
+            and row.model == model and row.prompt_version == PROMPT_VERSION):
+        return {"evidence": evidence, "opinion": _opinion_from_row(row)}   # cache hit
+
     try:
-        model = choose_model(evidence, settings)
-        raw = await judge.judge(evidence, model)
-        opinion = ground_opinion(raw, evidence).model_dump()
+        opinion = ground_opinion(await judge.judge(evidence, model), evidence).model_dump()
     except Exception:  # noqa: BLE001 — a judge/network/schema failure must never 500
-        opinion = None
+        return {"evidence": evidence, "opinion": None}   # do NOT cache failures
+
+    if row is None:
+        row = ReviewAdvice(patch_group_id=pg_id, core=core)
+        session.add(row)
+    row.source_sha = source_sha
+    row.base_sha = base_sha
+    row.model = model
+    row.prompt_version = PROMPT_VERSION
+    row.assessment = opinion["assessment"]
+    row.confidence = opinion["confidence"]
+    row.reason = opinion["reason"]
+    row.tips = opinion["tips"]
+    row.citations = opinion["citations"]
+    row.adapted_hunks = opinion["adapted_hunks"]
+    row.grounded = True
+    await session.commit()
     return {"evidence": evidence, "opinion": opinion}
