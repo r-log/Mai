@@ -382,3 +382,22 @@ class ReviewAdvice(Base):
     __table_args__ = (
         UniqueConstraint("patch_group_id", "core", name="uq_review_advice"),
     )
+
+
+class CodeFileIndex(Base):
+    """Cached tree-sitter extraction for one file at one fork HEAD. Derived &
+    recomputable: keyed (core, base_sha, path); recomputed when the fork HEAD moves.
+    Cache-only — safe to drop/rebuild."""
+    __tablename__ = "code_file_index"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    core: Mapped[str] = mapped_column(String(64))
+    base_sha: Mapped[str] = mapped_column(String(40))
+    path: Mapped[str] = mapped_column(Text)
+    exists: Mapped[bool] = mapped_column(Boolean, default=True)
+    file_symbols: Mapped[list] = mapped_column(JSON, default=list)
+    functions: Mapped[list] = mapped_column(JSON, default=list)
+    indexed_at: Mapped[datetime] = mapped_column(default=_now, onupdate=_now)
+
+    __table_args__ = (
+        UniqueConstraint("core", "base_sha", "path", name="uq_code_file_index"),
+    )
