@@ -163,7 +163,8 @@ def _me_html(username: str, is_maintainer: bool) -> str:
 
 
 def create_app(session_factory, hasher, session_secret: str, *,
-               cookie_secure: bool = True, review_git_client=None) -> FastAPI:
+               cookie_secure: bool = True, review_git_client=None,
+               review_judge=None) -> FastAPI:
     dummy_hash = hasher.hash(secrets.token_urlsafe(16))
     app = FastAPI()
 
@@ -248,7 +249,7 @@ def create_app(session_factory, hasher, session_secret: str, *,
 
     app.include_router(make_board_router(session_factory))
     app.include_router(make_me_router(session_factory))
-    app.include_router(make_review_router(session_factory, review_git_client))
+    app.include_router(make_review_router(session_factory, review_git_client, review_judge))
     app.mount("/static",
               StaticFiles(directory=Path(__file__).parent / "static"),
               name="static")
