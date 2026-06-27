@@ -177,6 +177,29 @@ function reviewRow(t) {
       ${t.f.magnitude} lines.</div></div>`;
 }
 
+function hunkBlock(h) {
+  const cls = h.applied ? "rev-hunk applied" : "rev-hunk rejected";
+  const tgt = h.target_context
+    ? `<div class="rev-tgt">target near line ${h.target_line} (best-effort):
+        <pre>${esc(h.target_context)}</pre></div>` : "";
+  return `<div class="${cls}"><div class="rev-hh">${h.applied ? "✓ applies" : "✗ rejects"} · ${esc(h.path)}</div>
+    <pre>${esc(h.patch_text)}</pre>${tgt}</div>`;
+}
+function renderEvidence(ev) {
+  const f = ev.fix, c = ev.conflict;
+  const sim = ev.similar.length
+    ? `<div class="rev-sec"><b>Already in ${cap(ev.core)}?</b> ${ev.similar.map(s =>
+        `<div class="rev-sim">~${Math.round(s.score*100)}% · <code>${esc(s.sha)}</code>
+         ${esc(s.title)} <span class="rev-d">${esc(s.date)}</span></div>`).join("")}</div>`
+    : `<div class="rev-sec rev-muted">no similar commits found in ${cap(ev.core)}</div>`;
+  return `<div class="rev">
+    <div class="rev-sec"><b>What it does</b> · ${esc(f.type)} · ${esc(f.subsystem)} · ${f.magnitude} lines
+      ${f.body ? `<div class="rev-body">${esc(f.body.slice(0,300))}</div>` : ""}</div>
+    <div class="rev-sec"><b>Why review</b> · ${c.applied}/${c.total} hunks apply
+      ${c.hunks.map(hunkBlock).join("")}</div>
+    ${sim}</div>`;
+}
+
 function renderReady(rows) {
   $("#ready-ct").textContent = rows.length;
   const list = $("#ready-list");
@@ -244,7 +267,24 @@ document.addEventListener("click", (e) => {
   if (e.target.closest("#f-mine")) { state.mine = !state.mine; render(); return; }
   if (e.target.closest("#far-toggle")) { state.far = !state.far; renderFar(tasks().far); return; }
   const why = e.target.closest("[data-why]");
-  if (why) { const p = why.parentElement.querySelector(".t-proof"); p.hidden = !p.hidden; return; }
+  if (why) {
+    const row = why.closest(".task"), proof = row.querySelector(".t-proof");
+    if (proof.dataset.loaded || !row.classList.contains("t-review")) {
+      proof.hidden = !proof.hidden; return;
+    }
+    proof.hidden = false; proof.innerHTML = "<div class='rev-load'>collecting evidence…</div>";
+    fetch(`/api/review/${encodeURIComponent(row.dataset.id)}`)
+      .then(r => r.json()).then(j => {
+        proof.dataset.loaded = "1";
+        proof.innerHTML = j.evidence ? renderEvidence(j.evidence)
+          : "<div class='rev-load'>no evidence (not a review item)</div>";
+      })
+      .catch(() => {
+        proof.dataset.loaded = "1";
+        proof.innerHTML = "<div class='rev-load'>error loading evidence</div>";
+      });
+    return;
+  }
   const act = e.target.closest("[data-act]");
   if (act) {
     const ids = (act.dataset.ids || "").split(",").filter(Boolean);
