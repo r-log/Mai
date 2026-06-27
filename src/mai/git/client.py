@@ -23,6 +23,11 @@ class GitClient(Protocol):
     async def head_sha(self, core: str) -> str: ...
     async def apply_fraction(self, core: str, patch_text: str,
                              paths: list[str]) -> tuple[int, int]: ...
+    async def rejected_hunks(self, core: str, patch_text: str,
+                             paths: list[str]) -> dict[str, str]: ...
+    async def read_region(self, core: str, path: str, start: int, end: int) -> str: ...
+    async def log_touching(self, core: str, paths: list[str], *,
+                           limit: int = 80) -> list[dict]: ...
 
 
 class LocalGitClient:
@@ -258,3 +263,43 @@ class LocalGitClient:
                 rejected += sum(1 for ln in rej.read_text("utf-8", "replace").splitlines()
                                 if ln.startswith("@@ "))
         return (max(0, total - rejected), total)
+
+    async def rejected_hunks(self, core: str, patch_text: str,
+                             paths: list[str]) -> dict[str, str]:
+        """Apply the patch with --reject; return {path: rej_text} (the hunks git
+        could not place). Dirties the worktree (next ensure_worktree resets)."""
+        wt = await self.ensure_worktree(core)
+        await self._run_raw(["-C", wt, "apply", "--reject", "-"],
+                            stdin=patch_text.encode("utf-8", "replace"))
+        self._dirty.add(core)
+        out: dict[str, str] = {}
+        for p in paths:
+            rej = Path(wt) / (p + ".rej")
+            out[p] = rej.read_text("utf-8", "replace") if rej.exists() else ""
+        return out
+
+    async def read_region(self, core: str, path: str, start: int, end: int) -> str:
+        """Lines [start, end] (1-based inclusive) of HEAD:path; '' if absent."""
+        rc, content, _ = await self._run_raw(
+            ["-C", str(self._path(core)), "show", f"HEAD:{path}"])
+        if rc != 0:
+            return ""
+        lines = content.splitlines()
+        return "\n".join(lines[max(0, start - 1):max(0, end)])
+
+    async def log_touching(self, core: str, paths: list[str], *,
+                           limit: int = 80) -> list[dict]:
+        """Recent non-merge commits touching any of `paths`: [{sha, date, title}]."""
+        if not paths:
+            return []
+        rc, out, _ = await self._run_raw(
+            ["-C", str(self._path(core)), "log", "--no-merges",
+             f"-n{limit}", "--format=%H%x09%cI%x09%s", "--", *paths])
+        if rc != 0:
+            return []
+        rows: list[dict] = []
+        for line in out.splitlines():
+            parts = line.split("\t")
+            if len(parts) >= 3:
+                rows.append({"sha": parts[0][:10], "date": parts[1][:10], "title": parts[2]})
+        return rows

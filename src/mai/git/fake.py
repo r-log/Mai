@@ -10,7 +10,10 @@ class FakeGitClient:
                  apply_results: dict[tuple[str, str, bool], str] | None = None,
                  head_shas: dict[str, str] | None = None,
                  fractions: dict[tuple[str, str], tuple[int, int]] | None = None,
-                 files: dict[tuple[str, str, str], str] | None = None):
+                 files: dict[tuple[str, str, str], str] | None = None,
+                 rejected: dict[tuple[str, str], dict[str, str]] | None = None,
+                 regions: dict[tuple[str, str], str] | None = None,
+                 logs: dict[str, list[dict]] | None = None):
         self._commits = commits or {}
         self._diffs = diffs or {}
         self._paths = paths or {}
@@ -18,6 +21,9 @@ class FakeGitClient:
         self._heads = head_shas or {}
         self._fractions = fractions or {}
         self._files = files or {}
+        self._rejected = rejected or {}
+        self._regions = regions or {}
+        self._logs = logs or {}
 
     async def ensure_mirror(self, core: str, url: str) -> None:
         return None
@@ -60,3 +66,12 @@ class FakeGitClient:
     async def apply_fraction(self, core: str, patch_text: str,
                              paths: list[str]) -> tuple[int, int]:
         return self._fractions.get((core, patch_text), (0, 1))
+
+    async def rejected_hunks(self, core, patch_text, paths):
+        return dict(self._rejected.get((core, patch_text), {}))
+
+    async def read_region(self, core, path, start, end):
+        return self._regions.get((core, path), "")
+
+    async def log_touching(self, core, paths, *, limit=80):
+        return list(self._logs.get(core, []))
