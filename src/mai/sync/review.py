@@ -2,7 +2,10 @@ import re
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from mai.config import settings as _settings
 from mai.db.models import Commit, CommitFile, PortVerdict
+from mai.judge.ground import ground_opinion
+from mai.judge.judge import choose_model
 from mai.sync.verdicts import closeness_label
 
 _HUNK_RE = re.compile(r"^@@ -(\d+)(?:,(\d+))? \+\d+(?:,\d+)? @@", re.M)
@@ -143,3 +146,19 @@ def _split_rej(rej_text: str) -> list[str]:
     if cur:
         parts.append("\n".join(cur))
     return parts
+
+
+async def build_review_advice(session, git_client, judge, item_id, *, settings=_settings):
+    """Collect evidence (P1), then — only for a real review item and only when a judge
+    is provided — get a grounded LLM opinion. Any judge failure degrades to opinion=None;
+    the evidence is always returned. Invariant 1: non-review -> evidence None, no judge call."""
+    evidence = await build_review_evidence(session, git_client, item_id)
+    if evidence is None or judge is None:
+        return {"evidence": evidence, "opinion": None}
+    try:
+        model = choose_model(evidence, settings)
+        raw = await judge.judge(evidence, model)
+        opinion = ground_opinion(raw, evidence).model_dump()
+    except Exception:  # noqa: BLE001 — a judge/network/schema failure must never 500
+        opinion = None
+    return {"evidence": evidence, "opinion": opinion}

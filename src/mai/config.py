@@ -29,6 +29,10 @@ class Settings(BaseSettings):
     web_host: str = "127.0.0.1"
     web_port: int = 8000
     forwarded_allow_ips: str = "127.0.0.1"
+    review_model: str = "anthropic/claude-sonnet-4.6"
+    review_model_large: str = "google/gemini-2.5-pro"
+    review_hunk_routing_threshold: int = 8
+    review_large_context_chars: int = 24000
 
 
 settings = Settings()
