@@ -93,3 +93,30 @@ async def test_get_file_index_no_session_parses_directly(cm_session):
     assert idx.find_function("helper").params == ["a", "b"]
     n = await cm_session.scalar(select(func.count()).select_from(CodeFileIndex))
     assert n == 0                                # nothing persisted without a session
+
+
+async def test_get_file_index_hit_reconstruction_is_faithful(cm_session):
+    # The CACHE-HIT path reconstructs from JSON; it must equal extract on the same bytes.
+    git = _git_with_file("zero", "b1", "src/x.cpp", CPP.decode())
+    await get_file_index(cm_session, git, "zero", "b1", "src/x.cpp")   # miss -> writes row
+    hit = await get_file_index(cm_session, git, "zero", "b1", "src/x.cpp")  # hit -> reconstructs
+    assert hit.file_symbols == extract.file_symbols(CPP)
+    assert hit.find_function("run").scope_names == extract.find_function(CPP, "run").scope_names
+
+
+async def test_get_file_index_reparses_on_extract_version_bump(cm_session, monkeypatch):
+    calls = {"n": 0}
+    real = extract.functions
+    def spy(src):
+        calls["n"] += 1
+        return real(src)
+    monkeypatch.setattr("mai.codememory.index.extract.functions", spy)
+    git = _git_with_file("zero", "b1", "src/x.cpp", CPP.decode())
+    await get_file_index(cm_session, git, "zero", "b1", "src/x.cpp")
+    assert calls["n"] == 1
+    # bump the extractor version -> the cached row is now stale -> re-parse + overwrite
+    monkeypatch.setattr("mai.codememory.index.extract.EXTRACT_VERSION", 999)
+    await get_file_index(cm_session, git, "zero", "b1", "src/x.cpp")
+    assert calls["n"] == 2
+    n = await cm_session.scalar(select(func.count()).select_from(CodeFileIndex))
+    assert n == 1                                   # overwritten in place, not duplicated

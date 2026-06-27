@@ -37,7 +37,11 @@ async def get_file_index(session, git_client, core: str, base_sha: str, path: st
     miss -> read+parse and add a row (NO commit — the caller's transaction owns it; autoflush
     makes a within-run repeat lookup a hit). session=None or any cache fault -> direct parse,
     no persistence. Never raises for cache reasons."""
+    # NOTE: when `session` is provided it MUST be autoflush=True (the default, and what
+    # SessionFactory uses): a within-run repeat lookup relies on read-your-own-writes so a
+    # file is parsed once per (core, base_sha, path), never double-added.
     cache_ok = session is not None
+    row = None
     if cache_ok:
         try:
             row = await session.scalar(select(CodeFileIndex).where(
@@ -46,7 +50,7 @@ async def get_file_index(session, git_client, core: str, base_sha: str, path: st
         except Exception:  # noqa: BLE001 — missing table / cache fault -> parse directly
             row, cache_ok = None, False
         else:
-            if row is not None:
+            if row is not None and row.index_version == extract.EXTRACT_VERSION:
                 return FileIndex(
                     exists=row.exists, file_symbols=set(row.file_symbols),
                     functions=[_fn_from_dict(d) for d in row.functions])
@@ -64,10 +68,16 @@ async def get_file_index(session, git_client, core: str, base_sha: str, path: st
         syms_json = sorted(syms)
 
     if cache_ok:
-        try:
+        # add a new row, or overwrite a stale-version one in place (uq is (core,base_sha,path)).
+        # No commit/flush — the caller's transaction owns the commit.
+        if row is None:
             session.add(CodeFileIndex(
                 core=core, base_sha=base_sha, path=path, exists=idx.exists,
-                file_symbols=syms_json, functions=fns_json))
-        except Exception:  # noqa: BLE001 — never break the caller over a cache write
-            pass
+                file_symbols=syms_json, functions=fns_json,
+                index_version=extract.EXTRACT_VERSION))
+        else:
+            row.exists = idx.exists
+            row.file_symbols = syms_json
+            row.functions = fns_json
+            row.index_version = extract.EXTRACT_VERSION
     return idx

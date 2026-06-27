@@ -396,6 +396,7 @@ class CodeFileIndex(Base):
     exists: Mapped[bool] = mapped_column(Boolean, default=True)
     file_symbols: Mapped[list] = mapped_column(JSON, default=list)
     functions: Mapped[list] = mapped_column(JSON, default=list)
+    index_version: Mapped[int] = mapped_column(Integer, default=0)
     indexed_at: Mapped[datetime] = mapped_column(default=_now, onupdate=_now)
 
     __table_args__ = (

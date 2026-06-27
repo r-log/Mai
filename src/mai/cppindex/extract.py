@@ -14,6 +14,10 @@ from tree_sitter import Node
 
 from mai.cppindex.parser import parse_root
 
+# Bump whenever the EXTRACTED OUTPUT changes (grammar, new symbol kinds, params/locals
+# logic). It is a code-memory cache validity key — stale rows are re-indexed on a bump.
+EXTRACT_VERSION = 1
+
 # Declarator wrappers to descend through to reach the named identifier of a
 # function or parameter (e.g. `char* foo()` -> pointer_declarator -> function_declarator).
 _DECL_WRAPPERS = {
