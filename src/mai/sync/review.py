@@ -157,41 +157,58 @@ def _opinion_from_row(row: ReviewAdvice) -> dict:
 
 async def build_review_advice(session, git_client, judge, item_id, *, settings=_settings):
     """Collect evidence (P1); for a review item with a judge, return the cached grounded
-    opinion on an exact-key hit, else compute -> ground -> upsert. Judge failures are not
-    cached. Invariant 1: non-review -> evidence None, no judge, no cache."""
+    opinion on an exact-key hit, else compute -> ground -> upsert. The cache is best-effort:
+    any cache/infra fault (missing table, head_sha error, insert race) degrades to a fresh
+    compute and never 500s. Judge failures yield opinion=None and are not cached. Invariant 1:
+    non-review -> evidence None, no judge, no cache."""
     evidence = await build_review_evidence(session, git_client, item_id)
     if evidence is None or judge is None:
         return {"evidence": evidence, "opinion": None}
 
     pg_id, _, core = item_id.rpartition(":")
     source_sha = (evidence.get("fix") or {}).get("source_sha")
-    base_sha = await git_client.head_sha(core)
-    model = choose_model(evidence, settings)
+    model = choose_model(evidence, settings)   # pure (no I/O)
 
-    row = await session.scalar(select(ReviewAdvice).where(
-        ReviewAdvice.patch_group_id == pg_id, ReviewAdvice.core == core))
-    if (row is not None and row.source_sha == source_sha and row.base_sha == base_sha
-            and row.model == model and row.prompt_version == PROMPT_VERSION):
-        return {"evidence": evidence, "opinion": _opinion_from_row(row)}   # cache hit
+    # Cache lookup — best-effort; a cache/infra fault must never 500.
+    cached_row = None
+    base_sha = None
+    try:
+        base_sha = await git_client.head_sha(core)
+        cached_row = await session.scalar(select(ReviewAdvice).where(
+            ReviewAdvice.patch_group_id == pg_id, ReviewAdvice.core == core))
+    except Exception:  # noqa: BLE001 — cache unavailable -> compute fresh below
+        base_sha, cached_row = None, None
 
+    if (cached_row is not None and base_sha is not None
+            and cached_row.source_sha == source_sha and cached_row.base_sha == base_sha
+            and cached_row.model == model and cached_row.prompt_version == PROMPT_VERSION):
+        return {"evidence": evidence, "opinion": _opinion_from_row(cached_row)}
+
+    # Compute — judge failure degrades to opinion=None, never cached.
     try:
         opinion = ground_opinion(await judge.judge(evidence, model), evidence).model_dump()
-    except Exception:  # noqa: BLE001 — a judge/network/schema failure must never 500
-        return {"evidence": evidence, "opinion": None}   # do NOT cache failures
+    except Exception:  # noqa: BLE001 — judge/network/schema failure must never 500
+        return {"evidence": evidence, "opinion": None}
 
-    if row is None:
-        row = ReviewAdvice(patch_group_id=pg_id, core=core)
-        session.add(row)
-    row.source_sha = source_sha
-    row.base_sha = base_sha
-    row.model = model
-    row.prompt_version = PROMPT_VERSION
-    row.assessment = opinion["assessment"]
-    row.confidence = opinion["confidence"]
-    row.reason = opinion["reason"]
-    row.tips = opinion["tips"]
-    row.citations = opinion["citations"]
-    row.adapted_hunks = opinion["adapted_hunks"]
-    row.grounded = True
-    await session.commit()
+    # Cache write — best-effort; only with a valid base_sha key.
+    if base_sha is not None:
+        try:
+            row = cached_row
+            if row is None:
+                row = ReviewAdvice(patch_group_id=pg_id, core=core)
+                session.add(row)
+            row.source_sha = source_sha
+            row.base_sha = base_sha
+            row.model = model
+            row.prompt_version = PROMPT_VERSION
+            row.assessment = opinion["assessment"]
+            row.confidence = opinion["confidence"]
+            row.reason = opinion["reason"]
+            row.tips = opinion["tips"]
+            row.citations = opinion["citations"]
+            row.adapted_hunks = opinion["adapted_hunks"]
+            row.grounded = True
+            await session.commit()
+        except Exception:  # noqa: BLE001 — cache write must never 500 (e.g. insert race)
+            await session.rollback()
     return {"evidence": evidence, "opinion": opinion}

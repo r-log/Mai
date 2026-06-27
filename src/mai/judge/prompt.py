@@ -3,6 +3,8 @@ import json
 
 from mai.config import settings
 
+# Bump on ANY change to SYSTEM_PROMPT, build_prompt, or settings.review_prompt_cap_chars —
+# it is a cache validity key; stale prompts otherwise serve cached opinions.
 PROMPT_VERSION = 1
 
 SYSTEM_PROMPT = (

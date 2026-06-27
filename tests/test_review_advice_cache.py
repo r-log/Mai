@@ -101,3 +101,32 @@ async def test_judge_failure_is_not_cached(seeded):
     ok = _judge()
     out2 = await build_review_advice(seeded, git, ok, "pg1:four")
     assert out2["opinion"]["assessment"] == "divergent" and ok.calls == 1
+
+
+async def test_cache_invalidates_when_model_changes(seeded, monkeypatch):
+    import mai.sync.review as rev
+    git, judge = _git(), _judge()
+    await build_review_advice(seeded, git, judge, "pg1:four")
+    assert judge.calls == 1
+    monkeypatch.setattr(rev, "choose_model", lambda ev, s: "other/model")
+    await build_review_advice(seeded, git, judge, "pg1:four")
+    assert judge.calls == 2                      # model key changed -> recompute
+
+
+async def test_cache_invalidates_when_prompt_version_changes(seeded, monkeypatch):
+    import mai.sync.review as rev
+    git, judge = _git(), _judge()
+    await build_review_advice(seeded, git, judge, "pg1:four")
+    assert judge.calls == 1
+    monkeypatch.setattr(rev, "PROMPT_VERSION", 999)
+    await build_review_advice(seeded, git, judge, "pg1:four")
+    assert judge.calls == 2                      # prompt_version key changed -> recompute
+
+
+async def test_cache_write_failure_degrades_not_500(seeded, monkeypatch):
+    git, judge = _git(), _judge()
+    async def boom():
+        raise RuntimeError("db down")
+    monkeypatch.setattr(seeded, "commit", boom)  # cache write fails
+    out = await build_review_advice(seeded, git, judge, "pg1:four")
+    assert out["opinion"]["assessment"] == "divergent"   # opinion still returned, no raise
